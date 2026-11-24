@@ -20,10 +20,32 @@ interface RequestOptions {
   /** Attach the access token (default true). */
   auth?: boolean;
   signal?: AbortSignal;
+  headers?: Record<string, string>;
+}
+
+const GUEST_KEY = 'velora_gid';
+let guestId: string | null = null;
+
+/** Random id for this browser so guests keep a bag and browsing history. Not a credential. */
+export function getGuestId(): string | null {
+  if (typeof window === 'undefined') return null;
+  if (guestId) return guestId;
+  try {
+    guestId = localStorage.getItem(GUEST_KEY);
+    if (!guestId || !/^[A-Za-z0-9_-]{16,64}$/.test(guestId)) {
+      guestId = `g_${crypto.randomUUID().replace(/-/g, '')}`;
+      localStorage.setItem(GUEST_KEY, guestId);
+    }
+  } catch {
+    guestId ??= `g_${crypto.randomUUID().replace(/-/g, '')}`; // storage blocked: keep for this page view
+  }
+  return guestId;
 }
 
 async function raw<T>(path: string, opts: RequestOptions, token: string | null): Promise<{ data: T; meta?: PaginationMeta }> {
-  const headers: Record<string, string> = { 'X-Velora-Client': 'web', Accept: 'application/json' };
+  const headers: Record<string, string> = { 'X-Velora-Client': 'web', Accept: 'application/json', ...opts.headers };
+  const gid = getGuestId();
+  if (gid) headers['X-Guest-Id'] = gid;
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
   if (token && opts.auth !== false) headers.Authorization = `Bearer ${token}`;
 

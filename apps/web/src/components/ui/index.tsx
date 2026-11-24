@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { forwardRef, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react';
 
-export const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
+import { cx } from '@/lib/cx';
+export { cx };
 
 /* ─────────── Logo ─────────── */
 

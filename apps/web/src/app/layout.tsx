@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, Manrope } from 'next/font/google';
 import { Providers } from './providers';
 import { SiteFooter, SiteHeader } from '@/components/site-chrome';
+import { CartDrawer, QuickView } from '@/components/shop-overlays';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
@@ -26,6 +27,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SiteHeader />
           <main id="main" className="flex-1">{children}</main>
           <SiteFooter />
+          <CartDrawer />
+          <QuickView />
         </Providers>
       </body>
     </html>

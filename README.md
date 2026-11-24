@@ -34,7 +34,29 @@ A fashion, beauty and lifestyle marketplace for Ghana, built to grow internation
 - Website pages: design system, sign-in, registration, forgot and reset password, and a protected account page.
 - 23 end-to-end API tests.
 
-The remaining phases are listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+**Phase 2: Customer website** is complete:
+
+- **Catalogue:**
+  - Department, shop-all, sale and search pages, rendered on the server
+  - URL-based filters: size, colour, brand, price, rating, stock, sale
+  - Sorting, pagination and quick view
+- **Product page:**
+  - Colourway gallery with hover zoom
+  - Stock per variant, size guides, delivery estimates
+  - Reviews with rating filters and fit summary, Q&A
+  - "Wear it with" and "Similar pieces" rails
+- **Search:** autocomplete, trending searches, recently viewed and personalised recommendations.
+- **Bag:** works for guests and members (merged at sign-in), with stock limits and promo codes.
+- **Checkout:**
+  - Four steps for guests or members
+  - Delivery fees by Ghana region, including free-delivery thresholds
+  - Cash or MoMo on delivery
+  - Totals calculated on the server
+  - Idempotent order placement and stock reservation under row locks, so stock is never oversold
+- **Account:** overview with loyalty points, profile, orders with cancellation, saved addresses and wishlist. Guests can track orders.
+- 39 end-to-end API tests, including a race for the last unit in stock.
+
+Online payments (Paystack and Hubtel, covering Mobile Money and cards, with webhook verification) are Phase 4. The remaining phases are listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Running locally
 
