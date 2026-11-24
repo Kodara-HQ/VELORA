@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/*
+ * VÉLORA design tokens.
+ * Brand palette: ink #111111 · paper #FFFFFF · ivory #F8F7F4 · rose #D9A0A7 · stone #777777
+ * Accessibility: stone (#777) on ivory is ~4.2:1, below AA for body text, so secondary TEXT uses
+ * `muted` (#5E5E5E, ~6:1). Stone is for borders, icons and large type. Rose is a background
+ * behind ink text only (ink-on-rose ≈ 9:1); never put white text on rose.
+ */
+@theme {
+  --color-ink: #111111;
+  --color-ink-soft: #2a2a2a;
+  --color-paper: #ffffff;
+  --color-ivory: #f8f7f4;
+  --color-sand: #ede9e3;
+  --color-line: #e3dfd8;
+  --color-stone: #777777;
+  --color-muted: #5e5e5e;
+  --color-rose: #d9a0a7;
+  --color-rose-soft: #f3e1e3;
+  --color-rose-deep: #9c4f59;
+  --color-success: #2f6b4f;
+  --color-success-soft: #e3efe8;
+  --color-danger: #a8323e;
+  --color-danger-soft: #f8e4e6;
+  --color-warning: #8a5a00;
+  --color-warning-soft: #f8edd6;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-manrope), var(--font-inter), ui-sans-serif, sans-serif;
+
+  --text-display: clamp(2.75rem, 7vw, 6rem);
+  --text-display--line-height: 0.95;
+  --text-display--letter-spacing: -0.035em;
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-fade-up: fade-up 0.5s var(--ease-out-soft) both;
+
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to { background-position: 200% 0; }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-ivory text-ink font-sans;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--color-rose);
+    color: var(--color-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

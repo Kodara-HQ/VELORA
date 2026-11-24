@@ -1,0 +1,26 @@
+# Local infrastructure for developers who use Docker.
+# Without Docker: run MySQL 8 / MariaDB 10.4+ locally and point DATABASE_URL at it.
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-velora_root}
+      MYSQL_DATABASE: velora_dev
+      MYSQL_USER: velora
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-velora_dev_pw}
+    ports: ["3306:3306"]
+    volumes: [mysql_data:/var/lib/mysql]
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+  redis:
+    image: redis:7.4-alpine
+    ports: ["6379:6379"]
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-dev_master_key_change_me}
+      MEILI_ENV: development
+    ports: ["7700:7700"]
+    volumes: [meili_data:/meili_data]
+volumes:
+  mysql_data:
+  meili_data:
