@@ -19,6 +19,7 @@ export interface ProductCard {
 }
 
 export interface CategoryTreeNode {
+  id: number;
   name: string;
   slug: string;
   imageUrl: string | null;

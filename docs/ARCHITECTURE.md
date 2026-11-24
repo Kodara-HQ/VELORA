@@ -34,8 +34,8 @@ Admin / Vendor portal ───────────────┘         �
 ## Roadmap
 
 1. **Foundation** ✅
-2. **Customer website:** catalogue and search APIs, product listing and detail pages, cart, checkout (guest and member), account
-3. **Administration:** dashboard, products (with CSV import), categories, inventory, orders, customers, reports
+2. **Customer website** ✅
+3. **Administration** ✅
 4. **Payments and delivery:** Paystack and Hubtel (MoMo and cards) with verified webhooks, shipping, tracking, returns and refunds
 5. **Marketplace:** vendor onboarding, vendor portal, commissions, settlements
 6. **Advanced:** recommendations, loyalty, promotions and flash sales, Meilisearch, notifications, analytics

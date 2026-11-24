@@ -63,7 +63,7 @@ export class CatalogService {
   }
 
   async categories() {
-    const strip = (n: CategoryNode): unknown => ({ name: n.name, slug: n.slug, imageUrl: n.imageUrl, children: n.children.map(strip) });
+    const strip = (n: CategoryNode): unknown => ({ id: n.id, name: n.name, slug: n.slug, imageUrl: n.imageUrl, children: n.children.map(strip) });
     return (await this.categoryTree()).tree.map(strip);
   }
 

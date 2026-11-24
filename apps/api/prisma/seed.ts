@@ -592,6 +592,10 @@ async function seedOrderHistory() {
       made++;
     }
   }
+  // Same thresholds the delivery flow uses (AdminOrdersService.deliver).
+  await prisma.$executeRaw`UPDATE loyalty_accounts SET tier = CASE
+    WHEN lifetime_points >= 20000 THEN 'PLATINUM' WHEN lifetime_points >= 8000 THEN 'GOLD'
+    WHEN lifetime_points >= 2500 THEN 'SILVER' ELSE 'BRONZE' END`;
   console.log(`✓ ${made} historical orders`);
 }
 

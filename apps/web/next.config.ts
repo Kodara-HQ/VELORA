@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: 'res.cloudinary.com' },
       { protocol: 'https', hostname: 'placehold.co' },
+      // Locally stored uploads in development (production uses the CDN host via PUBLIC_UPLOADS_URL).
+      { protocol: 'http', hostname: 'localhost', port: '4000', pathname: '/uploads/**' },
     ],
   },
   async headers() {

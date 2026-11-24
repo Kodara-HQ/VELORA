@@ -56,6 +56,36 @@ A fashion, beauty and lifestyle marketplace for Ghana, built to grow internation
 - **Account:** overview with loyalty points, profile, orders with cancellation, saved addresses and wishlist. Guests can track orders.
 - 39 end-to-end API tests, including a race for the last unit in stock.
 
+**Phase 3: Administration** is complete. The admin area is at `/admin`; sign in with a staff account.
+
+- **Access:** the sidebar shows only the areas each role can use, and every endpoint checks the same permissions on the server.
+- **Notification centre:** counts of orders to fulfil, low-stock variants and items awaiting review.
+- **Dashboard:**
+  - KPIs (revenue, orders, average order value, customers) compared with the previous period
+  - Fulfilment counts and daily revenue chart
+  - Best sellers, top departments, recent orders and inventory alerts
+  - Filters by date, department and channel
+- **Reports:** sales by day, week or month, with CSV export (protected against spreadsheet formula injection).
+- **Products:**
+  - Create and edit with a variant matrix and opening stock per warehouse
+  - Image upload (content-checked, 5 MB limit) and attributes
+  - Publish, archive or delete; approve or reject vendor products
+  - CSV import with a dry-run check, and CSV export
+- **Categories and brands:** manage the tree (reorder, no cycles, guarded delete) and brands.
+- **Orders:**
+  - Search and filters
+  - Dispatch: the stock reservation becomes a sale, and the shipment gets tracking
+  - Mark delivered: cash-on-delivery payment, sales counts, loyalty points, and vendor earnings start their hold period
+  - Staff cancellation, notes, tracking updates, printable invoice and packing slip
+- **Inventory:**
+  - Stock levels per warehouse
+  - Adjustments, which can never go below stock reserved for orders
+  - Reorder levels, movement ledger, valuation at cost and retail
+  - Two-step transfers, suppliers, purchase orders with partial goods receipts and weighted-average cost
+- **Customers:** segments (VIP, Loyal, New, At risk, Prospect, Regular), profile, lifetime value, and suspension.
+- **Staff:** create staff accounts, assign roles, suspend accounts, and browse the audit log.
+- 62 end-to-end API tests.
+
 Online payments (Paystack and Hubtel, covering Mobile Money and cards, with webhook verification) are Phase 4. The remaining phases are listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Running locally

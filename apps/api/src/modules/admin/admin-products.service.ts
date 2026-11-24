@@ -231,6 +231,7 @@ export class AdminProductsService {
       });
       if (dto.variants) await this.syncVariants(tx, id, dto.styleCode ?? before.styleCode, dto.variants, user.id);
       await this.writeChildren(tx, id, dto);
+      if (status === 'ACTIVE') await this.assertSellable(tx, id);
       await this.audit.log({
         userId: user.id, action: 'products.updated', entityType: 'product', entityId: id, ctx,
         oldValues: { name: before.name, basePrice: before.basePrice.toFixed(2), status: before.status },
@@ -243,11 +244,7 @@ export class AdminProductsService {
   async setStatus(user: AuthUser, id: number, status: ProductStatus, ctx: RequestContext, reason?: string) {
     const p = await this.prisma.product.findFirst({ where: { id, deletedAt: null } });
     if (!p) throw new NotFoundException('Product not found');
-    if (status === 'ACTIVE') {
-      const variants = await this.prisma.productVariant.count({ where: { productId: id, isActive: true, deletedAt: null } });
-      const images = await this.prisma.productImage.count({ where: { productId: id } });
-      if (!variants || !images) throw new BadRequestException('A product needs at least one active variant and one image before it can go live');
-    }
+    if (status === 'ACTIVE') await this.assertSellable(this.prisma, id);
     await this.prisma.$transaction(async (tx) => {
       await tx.product.update({
         where: { id },
@@ -256,6 +253,15 @@ export class AdminProductsService {
       await this.audit.log({ userId: user.id, action: `products.status_${status.toLowerCase()}`, entityType: 'product', entityId: id, oldValues: { status: p.status }, newValues: { status, reason }, ctx }, tx);
     });
     return this.get(id);
+  }
+
+  /** Live products must be buyable: at least one active variant and one image. */
+  private async assertSellable(db: Prisma.TransactionClient, id: number) {
+    const [variants, images] = await Promise.all([
+      db.productVariant.count({ where: { productId: id, isActive: true, deletedAt: null } }),
+      db.productImage.count({ where: { productId: id } }),
+    ]);
+    if (!variants || !images) throw new BadRequestException('A product needs at least one active variant and one image before it can go live');
   }
 
   async remove(user: AuthUser, id: number, ctx: RequestContext) {
