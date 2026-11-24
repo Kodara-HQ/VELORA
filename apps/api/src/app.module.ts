@@ -17,6 +17,9 @@ import { InventoryModule } from './modules/inventory/inventory.service';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { AdminDashboardModule } from './modules/admin/admin-dashboard.module';
 import { AdminCatalogModule } from './modules/admin/admin-catalog.module';
+import { AdminOrdersModule } from './modules/admin/admin-orders.module';
+import { AdminInventoryModule } from './modules/admin/admin-inventory.module';
+import { AdminCustomersModule } from './modules/admin/admin-customers.module';
 import { JwtAuthGuard, PermissionsGuard } from './common/guards/auth.guards';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor';
@@ -43,6 +46,9 @@ import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor'
     UploadsModule,
     AdminDashboardModule,
     AdminCatalogModule,
+    AdminOrdersModule,
+    AdminInventoryModule,
+    AdminCustomersModule,
   ],
   providers: [
     // Order matters: rate-limit → authenticate → authorise.

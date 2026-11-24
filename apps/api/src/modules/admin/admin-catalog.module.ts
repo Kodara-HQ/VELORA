@@ -4,7 +4,6 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
-import { Prisma } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsOptional, IsString, IsUrl, Matches, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import type { Request, Response } from 'express';
@@ -257,4 +256,3 @@ export class AdminTaxonomyController {
 })
 export class AdminCatalogModule {}
 
-export type { Prisma };
