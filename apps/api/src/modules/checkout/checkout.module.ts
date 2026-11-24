@@ -296,7 +296,6 @@ export class CheckoutController {
 @Module({
   imports: [CartModule],
   controllers: [CheckoutController],
-  providers: [CheckoutService, InventoryService],
-  exports: [InventoryService],
+  providers: [CheckoutService],
 })
 export class CheckoutModule {}

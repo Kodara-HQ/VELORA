@@ -13,6 +13,10 @@ import { CatalogModule } from './modules/catalog/catalog.module';
 import { CartModule } from './modules/cart/cart.module';
 import { CheckoutModule } from './modules/checkout/checkout.module';
 import { CustomerModule } from './modules/customer/customer.module';
+import { InventoryModule } from './modules/inventory/inventory.service';
+import { UploadsModule } from './modules/uploads/uploads.module';
+import { AdminDashboardModule } from './modules/admin/admin-dashboard.module';
+import { AdminCatalogModule } from './modules/admin/admin-catalog.module';
 import { JwtAuthGuard, PermissionsGuard } from './common/guards/auth.guards';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor';
@@ -35,6 +39,10 @@ import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor'
     CartModule,
     CheckoutModule,
     CustomerModule,
+    InventoryModule,
+    UploadsModule,
+    AdminDashboardModule,
+    AdminCatalogModule,
   ],
   providers: [
     // Order matters: rate-limit → authenticate → authorise.

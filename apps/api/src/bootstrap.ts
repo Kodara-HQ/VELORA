@@ -5,6 +5,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import type { Env } from './config/env';
+import { UPLOAD_DIR } from './modules/uploads/uploads.module';
 
 /** Shared by main.ts and the e2e tests so tests exercise the exact production pipeline. */
 export function configureApp(app: INestApplication) {
@@ -15,6 +16,8 @@ export function configureApp(app: INestApplication) {
   express.disable('x-powered-by');
   app.use(helmet());
   app.use(cookieParser());
+  express.useStaticAssets(UPLOAD_DIR, { prefix: '/uploads/', index: false, dotfiles: 'deny', maxAge: '30d',
+    setHeaders: (r) => { r.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); r.setHeader('X-Content-Type-Options', 'nosniff'); } });
   app.enableCors({
     origin: config.get('CORS_ORIGINS', { infer: true }).split(',').map((s: string) => s.trim()),
     credentials: true,

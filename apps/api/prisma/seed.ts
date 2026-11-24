@@ -473,6 +473,128 @@ async function seedStorefront() {
   console.log('✓ size guides, sales history, reviews, Q&A, search trends');
 }
 
+/** Deterministic PRNG so every developer gets the same demo history. */
+function mulberry32(seed: number) {
+  return () => {
+    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * 60 days of realistic order history for the admin dashboard and reports.
+ * Older orders are delivered and paid; recent ones are shipped or still being prepared
+ * (with stock properly reserved); a few are cancelled.
+ */
+async function seedOrderHistory() {
+  if (await prisma.order.count({ where: { idempotencyKey: { startsWith: 'seed-' } } })) return;
+  const rand = mulberry32(20261124);
+  const pick = <T,>(a: T[]) => a[Math.floor(rand() * a.length)];
+  const customers = await prisma.user.findMany({ where: { email: { endsWith: '@example.test' } }, include: { addresses: true } });
+  const variants = await prisma.productVariant.findMany({
+    where: { isActive: true },
+    include: { product: { include: { images: { take: 1, orderBy: { sortOrder: 'asc' } }, vendor: true } }, inventory: true },
+  });
+  const accra = await prisma.shippingMethod.findFirstOrThrow({ where: { code: 'standard', zone: { name: 'Greater Accra' } } });
+  const kumasi = await prisma.shippingMethod.findFirstOrThrow({ where: { code: 'standard', zone: { name: 'Ashanti' } } });
+  const guestNames = ['Yaa Mensah', 'Kojo Otoo', 'Afua Badu', 'Kwesi Arthur', 'Efe Bello', 'Maame Esi'];
+  let made = 0;
+
+  for (let day = 59; day >= 0; day--) {
+    const perDay = 1 + Math.floor(rand() * (day < 14 ? 4 : 3));
+    for (let n = 0; n < perDay; n++) {
+      const placedAt = new Date(Date.now() - day * 86_400_000 - Math.floor(rand() * 10) * 3_600_000);
+      const isGuest = rand() < 0.35;
+      const user = isGuest ? null : pick(customers);
+      const name = user ? `${user.firstName} ${user.lastName}` : pick(guestNames);
+      const inKumasi = rand() < 0.25;
+      const method = inKumasi ? kumasi : accra;
+      const address = {
+        recipientName: name, phone: user?.phone ?? `+23324${String(1000000 + Math.floor(rand() * 8999999))}`,
+        line1: `${1 + Math.floor(rand() * 90)} ${pick(['Oxford Street', 'Ring Road', 'Spintex Road', 'Liberation Road', 'Adum High Street'])}`,
+        city: inKumasi ? 'Kumasi' : pick(['Osu, Accra', 'East Legon, Accra', 'Tema', 'Dansoman, Accra']),
+        region: inKumasi ? 'Ashanti' : 'Greater Accra', countryCode: 'GH',
+      };
+      const lines = Array.from({ length: 1 + Math.floor(rand() * 3) }, () => ({ v: pick(variants), qty: rand() < 0.8 ? 1 : 2 }))
+        .filter((l, i, arr) => arr.findIndex((x) => x.v.id === l.v.id) === i);
+      const subtotal = lines.reduce((s, l) => s.add((l.v.price ?? l.v.product.basePrice).mul(l.qty)), new Prisma.Decimal(0));
+      const shipping = method.freeOverAmount && subtotal.gte(method.freeOverAmount) ? new Prisma.Decimal(0) : method.fee;
+      const cancelled = rand() < 0.06;
+      const status = cancelled ? 'CANCELLED' : day > 6 ? 'DELIVERED' : day > 2 ? 'SHIPPED' : 'PROCESSING';
+      const paid = status === 'DELIVERED';
+      const orderNumber = `VL${placedAt.toISOString().slice(2, 10).replace(/-/g, '')}S${String(made).padStart(4, '0')}`;
+
+      await prisma.$transaction(async (tx) => {
+        const order = await tx.order.create({
+          data: {
+            orderNumber, userId: user?.id, guestEmail: user?.email ?? `${name.split(' ')[0].toLowerCase()}.${made}@example.test`,
+            guestPhone: address.phone, status, paymentStatus: paid ? 'PAID' : 'PENDING',
+            subtotal, shippingTotal: shipping, grandTotal: subtotal.add(shipping), shippingMethodId: method.id,
+            shippingAddress: address, idempotencyKey: `seed-${made}`, channel: rand() < 0.3 ? 'mobile' : 'web',
+            placedAt, createdAt: placedAt, paidAt: paid ? new Date(placedAt.getTime() + 2 * 86_400_000) : null,
+            cancelledAt: cancelled ? new Date(placedAt.getTime() + 3_600_000) : null, cancelReason: cancelled ? 'Cancelled by customer' : null,
+          },
+        });
+        for (const l of lines) {
+          const wh = l.v.inventory.slice().sort((a, b) => (b.quantityOnHand - b.quantityReserved) - (a.quantityOnHand - a.quantityReserved))[0];
+          const unit = l.v.price ?? l.v.product.basePrice;
+          const item = await tx.orderItem.create({
+            data: {
+              orderId: order.id, productId: l.v.productId, variantId: l.v.id, vendorId: l.v.product.vendorId, warehouseId: wh?.warehouseId,
+              productName: l.v.product.name, variantLabel: [l.v.color, l.v.size].filter(Boolean).join(' / '), sku: l.v.sku,
+              imageUrl: l.v.product.images[0]?.url, unitPrice: unit, quantity: l.qty, lineTotal: unit.mul(l.qty), createdAt: placedAt,
+            },
+          });
+          if (l.v.product.vendorId && l.v.product.vendor) {
+            const gross = unit.mul(l.qty);
+            const commission = gross.mul(l.v.product.vendor.commissionRate).div(100).toDecimalPlaces(2);
+            await tx.vendorCommission.create({
+              data: { vendorId: l.v.product.vendorId, orderItemId: item.id, rate: l.v.product.vendor.commissionRate, grossAmount: gross,
+                commissionAmount: commission, netAmount: gross.sub(commission),
+                status: cancelled ? 'REVERSED' : paid ? 'ELIGIBLE' : 'PENDING', eligibleAt: paid ? new Date(placedAt.getTime() + 16 * 86_400_000) : null },
+            });
+          }
+          // Still-processing orders hold real reservations so fulfilment from the admin works end to end.
+          if (status === 'PROCESSING' && wh && wh.quantityOnHand - wh.quantityReserved >= l.qty) {
+            await tx.inventory.update({ where: { id: wh.id }, data: { quantityReserved: { increment: l.qty } } });
+            wh.quantityReserved += l.qty;
+            await tx.stockMovement.create({ data: { inventoryId: wh.id, type: 'RESERVATION', quantity: l.qty, balanceAfter: wh.quantityOnHand, referenceType: 'order', referenceId: order.id, note: 'Reserved for order', createdAt: placedAt } });
+          }
+        }
+        await tx.payment.create({
+          data: { orderId: order.id, provider: 'CASH_ON_DELIVERY', method: 'CASH', reference: `PAY-${orderNumber}`, amount: order.grandTotal,
+            status: paid ? 'SUCCESS' : cancelled ? 'ABANDONED' : 'PENDING', verifiedAt: paid ? order.paidAt : null, createdAt: placedAt },
+        });
+        const history: Array<[string, string, number]> = [['PROCESSING', 'Order placed. Pay cash or MoMo to the rider on delivery.', 0]];
+        if (cancelled) history.push(['CANCELLED', 'Cancelled by customer', 1]);
+        if (status === 'SHIPPED' || status === 'DELIVERED') history.push(['SHIPPED', 'Handed to VÉLORA Dispatch', 20]);
+        if (status === 'DELIVERED') history.push(['DELIVERED', 'Delivered and paid on delivery', 48]);
+        for (const [s, note, h] of history) {
+          await tx.orderStatusHistory.create({ data: { orderId: order.id, toStatus: s as never, note, createdAt: new Date(placedAt.getTime() + h * 3_600_000) } });
+        }
+        if (status === 'SHIPPED' || status === 'DELIVERED') {
+          const shippedAt = new Date(placedAt.getTime() + 20 * 3_600_000);
+          await tx.shipment.create({
+            data: { orderId: order.id, carrier: 'VÉLORA Dispatch', trackingNumber: `VD${orderNumber.slice(2)}`, status: status === 'DELIVERED' ? 'DELIVERED' : 'IN_TRANSIT',
+              dispatchedAt: shippedAt, deliveredAt: status === 'DELIVERED' ? new Date(placedAt.getTime() + 48 * 3_600_000) : null,
+              events: { create: [{ status: 'DISPATCHED', description: 'Left the Accra Fulfilment Centre', location: 'Spintex', occurredAt: shippedAt }] } },
+          });
+        }
+        if (user && paid) {
+          await tx.customer.update({ where: { userId: user.id }, data: { orderCount: { increment: 1 }, lifetimeValue: { increment: order.grandTotal }, lastOrderAt: placedAt } });
+          const points = Math.floor(Number(order.grandTotal));
+          const acct = await tx.loyaltyAccount.update({ where: { userId: user.id }, data: { pointsBalance: { increment: points }, lifetimePoints: { increment: points } } });
+          await tx.loyaltyTransaction.create({ data: { accountId: acct.id, type: 'EARN', points, balanceAfter: acct.pointsBalance, orderId: order.id, description: `Order ${orderNumber}` } });
+        }
+      });
+      made++;
+    }
+  }
+  console.log(`✓ ${made} historical orders`);
+}
+
 async function main() {
   await seedAccessControl();
   await seedUsers();
@@ -483,6 +605,7 @@ async function main() {
   await seedProducts(vendor.id);
   await seedCommerceConfig();
   await seedStorefront();
+  await seedOrderHistory();
 }
 
 main()

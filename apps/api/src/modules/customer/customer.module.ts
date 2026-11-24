@@ -13,7 +13,6 @@ import { CurrentUser, Public } from '../../common/decorators';
 import { Paginated, PaginationQuery } from '../../common/dto/pagination.dto';
 import { GH_PHONE_RULE } from '../auth/dto/auth.dto';
 import { AddressInput } from '../checkout/checkout.dto';
-import { CheckoutModule } from '../checkout/checkout.module';
 import { InventoryService } from '../inventory/inventory.service';
 import { cardSelect, toCard, visibleWhere } from '../catalog/product-card';
 import { CUSTOMER_CANCELLABLE, orderInclude, orderSummary, presentOrder } from '../orders/order-presenter';
@@ -281,5 +280,5 @@ export class NewsletterController {
   }
 }
 
-@Module({ imports: [CheckoutModule], controllers: [CustomerController, NewsletterController], providers: [CustomerService] })
+@Module({ controllers: [CustomerController, NewsletterController], providers: [CustomerService] })
 export class CustomerModule {}
