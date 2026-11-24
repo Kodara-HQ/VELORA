@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "velora-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:dev", "-w", "@velora/api"],
+      "port": 4000,
+      "url": "http://localhost:4000"
+    },
+    {
+      "name": "velora-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "@velora/web"],
+      "port": 3000
+    }
+  ]
+}

@@ -6,8 +6,7 @@
     "rootDir": "src",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "strictPropertyInitialization": false,
-    "incremental": true
+    "strictPropertyInitialization": false
   },
   "include": ["src"]
 }
