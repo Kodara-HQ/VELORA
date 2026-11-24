@@ -18,7 +18,7 @@ export function configureApp(app: INestApplication) {
   app.enableCors({
     origin: config.get('CORS_ORIGINS', { infer: true }).split(',').map((s: string) => s.trim()),
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Velora-Client', 'Idempotency-Key'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Velora-Client', 'X-Guest-Id', 'Idempotency-Key'],
   });
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });

@@ -388,6 +388,91 @@ async function seedCommerceConfig() {
   console.log(`✓ ${coupons.length} coupons, shipping zones, ${settings.length} settings, suppliers`);
 }
 
+const SIZE_GUIDES: Record<string, Prisma.InputJsonValue> = {
+  'womens-fashion': {
+    unit: 'cm', note: 'Measure over light clothing. Between sizes? Size up for a relaxed fit.',
+    columns: ['Size', 'UK', 'Bust', 'Waist', 'Hips'],
+    rows: [['XS', '6', '80–83', '62–65', '87–90'], ['S', '8', '84–87', '66–69', '91–94'], ['M', '10', '88–92', '70–74', '95–99'],
+      ['L', '12–14', '93–99', '75–81', '100–106'], ['XL', '16', '100–106', '82–88', '107–113']],
+  },
+  'mens-fashion': {
+    unit: 'cm', note: 'Chest measured under the arms; waist at the natural waistline.',
+    columns: ['Size', 'Chest', 'Waist', 'Neck'],
+    rows: [['S', '88–94', '74–80', '37–38'], ['M', '95–101', '81–87', '39–40'], ['L', '102–108', '88–94', '41–42'],
+      ['XL', '109–116', '95–102', '43–44'], ['XXL', '117–124', '103–110', '45–46']],
+  },
+  'childrens-fashion': {
+    unit: 'cm', note: 'Sizes are by age; check height for the best fit.',
+    columns: ['Size', 'Height', 'Chest'],
+    rows: [['2Y', '92', '53'], ['4Y', '104', '57'], ['6Y', '116', '61'], ['8Y', '128', '65'], ['10Y', '140', '70']],
+  },
+  shoes: {
+    unit: 'cm', note: 'Measure heel to longest toe while standing.',
+    columns: ['EU', 'UK', 'US (W)', 'Foot length'],
+    rows: [['37', '4', '6.5', '23.5'], ['38', '5', '7.5', '24.1'], ['39', '6', '8.5', '24.8'], ['40', '6.5', '9', '25.4'],
+      ['41', '7.5', '10', '26.0'], ['42', '8', '10.5', '26.7'], ['43', '9', '11.5', '27.3'], ['44', '9.5', '12', '28.0']],
+  },
+};
+
+const REVIEW_TEXT: Array<[number, string, string, 'RUNS_SMALL' | 'TRUE_TO_SIZE' | 'RUNS_LARGE']> = [
+  [5, 'Exactly as pictured', 'The fabric feels premium and the fit is spot on. Delivery to East Legon took a day.', 'TRUE_TO_SIZE'],
+  [5, 'My new favourite', 'Wore it to a wedding in Kumasi and got so many compliments. Worth every pesewa.', 'TRUE_TO_SIZE'],
+  [4, 'Lovely, size up', 'Beautiful finish but a little snug across the shoulders. I would order one size up.', 'RUNS_SMALL'],
+  [4, 'Great quality', 'Well made and the colour is rich. Packaging was elegant too.', 'TRUE_TO_SIZE'],
+  [5, 'Perfect gift', 'Bought this for my sister and she loves it. Arrived beautifully wrapped.', 'TRUE_TO_SIZE'],
+  [3, 'Nice but roomy', 'Good material, but it runs a bit large for me. Customer care helped with an exchange.', 'RUNS_LARGE'],
+];
+
+/** Storefront realism: size guides, sales history, approved reviews, Q&A and search trends. Idempotent. */
+async function seedStorefront() {
+  for (const [slug, guide] of Object.entries(SIZE_GUIDES)) {
+    await prisma.category.updateMany({ where: { slug, sizeGuide: { equals: Prisma.DbNull } }, data: { sizeGuide: guide } });
+  }
+
+  const products = await prisma.product.findMany({ orderBy: { id: 'asc' } });
+  if (products.every((p) => p.soldCount === 0)) {
+    for (const [i, p] of products.entries()) {
+      await prisma.product.update({ where: { id: p.id }, data: { soldCount: (i * 37 + 11) % 180 + (p.isFeatured ? 60 : 0), viewCount: (i * 131) % 900 + 120 } });
+    }
+  }
+
+  if (!(await prisma.productReview.count())) {
+    const reviewers = await prisma.user.findMany({ where: { email: { endsWith: '@example.test' } }, orderBy: { id: 'asc' } });
+    for (const [i, p] of products.slice(0, 18).entries()) {
+      const n = 2 + (i % 3);
+      const picks = Array.from({ length: n }, (_, k) => REVIEW_TEXT[(i + k * 2) % REVIEW_TEXT.length]);
+      await prisma.productReview.createMany({
+        data: picks.map(([rating, title, body, fit], k) => ({
+          productId: p.id, userId: reviewers[(i + k) % reviewers.length].id, rating, title, body, fit,
+          status: 'APPROVED' as const, helpfulCount: (i + k * 3) % 9,
+          createdAt: new Date(Date.now() - (i * 3 + k) * 86_400_000),
+        })),
+      });
+      const avg = picks.reduce((s, r) => s + r[0], 0) / n;
+      await prisma.product.update({ where: { id: p.id }, data: { avgRating: new Prisma.Decimal(avg.toFixed(2)), reviewCount: n } });
+    }
+  }
+
+  if (!(await prisma.productQuestion.count())) {
+    const asker = await prisma.user.findFirstOrThrow({ where: { email: { endsWith: '@example.test' } } });
+    const support = await prisma.user.findFirstOrThrow({ where: { email: 'customer-support@staff.velora.test' } });
+    const dress = products.find((p) => p.slug === 'satin-wrap-midi-dress');
+    if (dress) {
+      await prisma.productQuestion.create({
+        data: { productId: dress.id, userId: asker.id, question: 'Is the satin see-through in the lighter colour?',
+          answer: 'The Champagne colourway is fully opaque. We recommend nude undergarments for the smoothest finish.',
+          answeredBy: support.id, answeredAt: new Date(), status: 'APPROVED' },
+      });
+    }
+  }
+
+  if (!(await prisma.searchTerm.count())) {
+    const terms: Array<[string, number]> = [['dress', 412], ['sneakers', 298], ['kente', 251], ['shea butter', 187], ['linen', 143], ['handbag', 139], ['earrings', 96], ['blazer', 88]];
+    await prisma.searchTerm.createMany({ data: terms.map(([term, searchCount]) => ({ term, searchCount, resultCount: 1 })) });
+  }
+  console.log('✓ size guides, sales history, reviews, Q&A, search trends');
+}
+
 async function main() {
   await seedAccessControl();
   await seedUsers();
@@ -397,6 +482,7 @@ async function main() {
   await seedWarehouses();
   await seedProducts(vendor.id);
   await seedCommerceConfig();
+  await seedStorefront();
 }
 
 main()

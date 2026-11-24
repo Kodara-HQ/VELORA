@@ -5,11 +5,13 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { PrincipalService } from './principal.service';
 import { TokensService } from './tokens.service';
+import { CartModule } from '../cart/cart.module';
 import type { Env } from '../../config/env';
 
 @Global()
 @Module({
   imports: [
+    CartModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) => ({

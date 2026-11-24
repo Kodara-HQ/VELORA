@@ -9,6 +9,8 @@ import { ChangePasswordDto, ForgotPasswordDto, LoginDto, RefreshDto, RegisterDto
 import { CurrentUser, Public } from '../../common/decorators';
 import { requestContext } from '../../common/utils/request';
 import type { IssuedTokens } from './tokens.service';
+import { CartService } from '../cart/cart.module';
+import { readGuestId } from '../../common/viewer';
 import type { Env } from '../../config/env';
 
 export const REFRESH_COOKIE = 'velora_rt';
@@ -27,6 +29,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly config: ConfigService<Env, true>,
+    private readonly cart: CartService,
   ) {}
 
   @Public()
@@ -35,6 +38,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Create a customer account and start a session' })
   async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.register(dto, requestContext(req));
+    await this.cart.mergeGuestCart(result.user.id, readGuestId(req.headers));
     return this.respond(req, res, result);
   }
 
@@ -42,8 +46,10 @@ export class AuthController {
   @Post('login')
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Sign in. Sending X-Guest-Id merges that guest bag into the account.' })
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.login(dto, requestContext(req));
+    await this.cart.mergeGuestCart(result.user.id, readGuestId(req.headers));
     return this.respond(req, res, result);
   }
 

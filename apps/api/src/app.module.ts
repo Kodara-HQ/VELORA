@@ -9,6 +9,10 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { PlatformModule } from './modules/settings/settings.module';
+import { CatalogModule } from './modules/catalog/catalog.module';
+import { CartModule } from './modules/cart/cart.module';
+import { CheckoutModule } from './modules/checkout/checkout.module';
+import { CustomerModule } from './modules/customer/customer.module';
 import { JwtAuthGuard, PermissionsGuard } from './common/guards/auth.guards';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor';
@@ -27,6 +31,10 @@ import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor'
     UsersModule,
     RolesModule,
     PlatformModule,
+    CatalogModule,
+    CartModule,
+    CheckoutModule,
+    CustomerModule,
   ],
   providers: [
     // Order matters: rate-limit → authenticate → authorise.
