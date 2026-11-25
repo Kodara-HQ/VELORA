@@ -104,7 +104,29 @@ A fashion, beauty and lifestyle marketplace for Ghana, built to grow internation
 
 **Going live with Hubtel:**
 1. Set `HUBTEL_CLIENT_ID`, `HUBTEL_CLIENT_SECRET` and `HUBTEL_MERCHANT_ACCOUNT`.
-2. Make sure `API_PUBLIC_URL` is reachable from the internet so Hubtel's callback can arrive. The remaining phases are listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+2. Make sure `API_PUBLIC_URL` is reachable from the internet so Hubtel's callback can arrive.
+
+**Phase 5: Marketplace** is complete.
+
+- **Onboarding:** shoppers apply at `/sell`. Staff review the application at `/admin/vendor-applications`. Approval creates, in one transaction, the shop, its own stock location (`VND-<id>`) and the seller's portal access, and notifies the seller.
+- **Vendor portal** (`/vendor`):
+  - a dashboard;
+  - products, which are always reviewed by VÉLORA before going on sale, and an edit to a live product sends it back for review;
+  - inventory for the seller's own location;
+  - orders, showing only the seller's lines and the delivery city, with no customer contact details;
+  - earnings, statements and a sales report with CSV export;
+  - reviews, payout details and in-app notifications.
+- **Isolation:** every portal query is scoped by the vendor ID on the signed-in user, never by a request parameter. Another shop's records return 404.
+- **Commissions and settlements:**
+  - Each sale records the commission at the vendor's current rate.
+  - Earnings are held until the order is delivered and the return window closes; refunds and cancellations reverse them.
+  - Finance generates statements at `/admin/settlements`, approves them, pays, and records the transfer reference. A sale can only appear on one statement.
+  - Payment is refused until the vendor has added payout details.
+- **Vendor management:** per-vendor stats, commission changes (new orders only), and suspension, which hides the shop's products and locks the portal immediately.
+- **Shop pages:** each vendor has a public page at `/v/<slug>`, linked from "Sold by" on product pages.
+- 78 end-to-end API tests, including vendor-isolation tests.
+
+The remaining phases are listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Running locally
 
@@ -142,6 +164,7 @@ npm run dev:web     # http://localhost:3000
 | Super Administrator | `admin@velora.test` |
 | Staff, one account per role | `admin@`, `product-manager@`, `inventory-manager@`, `order-manager@`, `finance-officer@`, `customer-support@`, `marketing-manager@` and `warehouse-officer@` at `staff.velora.test` |
 | Vendor (Adinkra Atelier) | `vendor@velora.test` |
+| Seller applicant (application pending) | `applicant@velora.test` |
 | Customers | `adwoa.nkansah@example.test` and others |
 
 ## Tests

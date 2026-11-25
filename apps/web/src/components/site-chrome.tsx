@@ -13,6 +13,9 @@ import { SearchBox } from './search-box';
 import { Container, cx, Logo } from './ui';
 import { NewsletterForm } from './newsletter';
 
+/** Admin and vendor portals render their own chrome. */
+const isPortal = (p: string) => p === '/admin' || p === '/vendor' || p.startsWith('/admin/') || p.startsWith('/vendor/');
+
 export function useCategories() {
   return useQuery({ queryKey: ['categories'], queryFn: () => api<CategoryTreeNode[]>('/categories', { auth: false }), staleTime: 600_000 });
 }
@@ -42,7 +45,7 @@ export function SiteHeader() {
     return () => { document.body.style.overflow = ''; };
   }, [menuOpen]);
 
-  if (pathname.startsWith('/admin')) return null;
+  if (isPortal(pathname)) return null;
   const iconBtn = 'relative flex h-10 w-10 items-center justify-center rounded-full hover:bg-sand';
   const tree = categories.data ?? [];
   const megaFor = tree.find((c) => c.slug === hovered);
@@ -165,7 +168,7 @@ function MobileMenu({ tree, onClose }: { tree: CategoryTreeNode[]; onClose: () =
 export function SiteFooter() {
   const pathname = usePathname();
   const categories = useCategories();
-  if (pathname.startsWith('/admin')) return null;
+  if (isPortal(pathname)) return null;
   return (
     <footer className="mt-20 bg-ink text-paper">
       <Container className="grid gap-10 py-14 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
@@ -186,6 +189,7 @@ export function SiteFooter() {
           { href: '/login', label: 'Sign in' },
           { href: '/register', label: 'Become a member' },
           { href: '/account/wishlist', label: 'Wishlist' },
+          { href: '/sell', label: 'Sell on VÉLORA' },
           { href: '/styleguide', label: 'Design system' },
         ]} />
       </Container>

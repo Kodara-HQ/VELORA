@@ -30,15 +30,18 @@ export function flattenCategories(tree: AdminCategory[], depth = 0): Array<Admin
   return tree.flatMap((c) => [{ ...c, depth }, ...flattenCategories(c.children, depth + 1)]);
 }
 
-export function ProductForm({ product, onSaved }: { product?: AdminProduct; onSaved?: (p: AdminProduct) => void }) {
+/** Admin mode uses the full admin API; vendor mode talks only to /vendor/* and public catalogue endpoints. */
+export function ProductForm({ product, onSaved, mode = 'admin' }: { product?: AdminProduct; onSaved?: (p: AdminProduct) => void; mode?: 'admin' | 'vendor' }) {
   const router = useRouter();
-  const cats = useQuery({ queryKey: ['admin-categories'], queryFn: () => api<AdminCategory[]>('/admin/categories') });
-  const brands = useQuery({ queryKey: ['admin-brands'], queryFn: () => api<Brand[]>('/admin/brands') });
-  const warehouses = useQuery({ queryKey: ['admin-warehouses'], queryFn: () => api<Warehouse[]>('/admin/warehouses') });
+  const vendor = mode === 'vendor';
+  const base = vendor ? '/vendor' : '/admin';
+  const cats = useQuery({ queryKey: [mode, 'categories'], queryFn: () => api<AdminCategory[]>(vendor ? '/categories' : '/admin/categories', vendor ? { auth: false } : {}) });
+  const brands = useQuery({ queryKey: [mode, 'brands'], queryFn: () => api<Brand[]>(vendor ? '/brands' : '/admin/brands', vendor ? { auth: false } : {}) });
+  const warehouses = useQuery({ queryKey: [mode, 'warehouses'], queryFn: () => api<Warehouse[]>(`${base}/warehouses`) });
 
   const [v, setV] = useState({
     name: product?.name ?? '', slug: product?.slug ?? '', categoryId: product ? String(product.categoryId) : '', brandId: product?.brandId ? String(product.brandId) : '',
-    status: product?.status ?? 'DRAFT', basePrice: product?.basePrice ?? '', compareAtPrice: product?.compareAtPrice ?? '', isFeatured: product?.isFeatured ?? false,
+    status: vendor && (product?.status === 'REJECTED' || product?.status === 'ACTIVE') ? 'PENDING_REVIEW' : product?.status ?? 'DRAFT', basePrice: product?.basePrice ?? '', compareAtPrice: product?.compareAtPrice ?? '', isFeatured: product?.isFeatured ?? false,
     shortDescription: product?.shortDescription ?? '', description: product?.description ?? '', material: product?.material ?? '',
     careInstructions: product?.careInstructions ?? '', videoUrl: product?.videoUrl ?? '', tags: (product?.tags ?? []).join(', '),
   });
@@ -57,7 +60,7 @@ export function ProductForm({ product, onSaved }: { product?: AdminProduct; onSa
   const colorOptions = [...new Set(variants.map((x) => x.color).filter(Boolean))];
 
   const upload = useMutation({
-    mutationFn: (files: File[]) => uploadFiles<Array<{ url: string }>>('/admin/uploads/images', 'files', files),
+    mutationFn: (files: File[]) => uploadFiles<Array<{ url: string }>>(`${base}/uploads/images`, 'files', files),
     onSuccess: (stored) => setImages((cur) => [...cur, ...stored.map((s) => ({ key: newKey(), url: s.url, color: '', alt: '' }))]),
   });
 
@@ -65,7 +68,7 @@ export function ProductForm({ product, onSaved }: { product?: AdminProduct; onSa
     mutationFn: () => {
       const body = {
         name: v.name, slug: v.slug || undefined, categoryId: Number(v.categoryId) || undefined, brandId: v.brandId ? Number(v.brandId) : null,
-        status: v.status, basePrice: v.basePrice, compareAtPrice: v.compareAtPrice || undefined, isFeatured: v.isFeatured,
+        status: v.status, basePrice: v.basePrice, compareAtPrice: v.compareAtPrice || undefined, isFeatured: vendor ? undefined : v.isFeatured,
         shortDescription: v.shortDescription, description: v.description, material: v.material, careInstructions: v.careInstructions, videoUrl: v.videoUrl,
         tags: v.tags.split(',').map((t) => t.trim()).filter(Boolean),
         images: images.map((i) => ({ url: i.url, color: i.color || undefined, alt: i.alt || undefined })),
@@ -77,12 +80,12 @@ export function ProductForm({ product, onSaved }: { product?: AdminProduct; onSa
         })),
       };
       return product
-        ? api<AdminProduct>(`/admin/products/${product.id}`, { method: 'PUT', body })
-        : api<AdminProduct>('/admin/products', { method: 'POST', body });
+        ? api<AdminProduct>(`${base}/products/${product.id}`, { method: 'PUT', body })
+        : api<AdminProduct>(`${base}/products`, { method: 'POST', body });
     },
     onSuccess: (p) => {
       setErrors({});
-      if (!product) router.replace(`/admin/products/${p.id}?created=1`);
+      if (!product) router.replace(`${base}/products/${p.id}?created=1`);
       else onSaved?.(p);
     },
     onError: (e) => { if (e instanceof ApiError) setErrors(e.fieldErrors); },
@@ -223,7 +226,7 @@ export function ProductForm({ product, onSaved }: { product?: AdminProduct; onSa
               </tbody>
             </table>
           </div>
-          {product && <p className="mt-3 text-xs text-muted">Stock for existing variants changes through Inventory (adjustments, transfers, purchase orders) so every unit is accounted for. Untick “Active” to stop selling a variant.</p>}
+          {product && <p className="mt-3 text-xs text-muted">Stock for existing variants changes through {vendor ? 'the Inventory page' : 'Inventory (adjustments, transfers, purchase orders)'} so every unit is accounted for. Untick “Active” to stop selling a variant.</p>}
         </Panel>
 
         <Panel title="Attributes" actions={<button type="button" className="text-xs font-semibold underline" onClick={() => setAttributes([...attributes, { key: newKey(), name: '', value: '' }])}>Add attribute</button>}>
@@ -243,14 +246,27 @@ export function ProductForm({ product, onSaved }: { product?: AdminProduct; onSa
       <div className="space-y-6">
         <Panel title="Publishing">
           <div className="space-y-4">
-            <Select label="Status" value={v.status} onChange={set('status')}>
-              <option value="DRAFT">Draft (hidden)</option>
-              <option value="ACTIVE">Active (on sale)</option>
-              <option value="ARCHIVED">Archived</option>
-              {product?.status === 'PENDING_REVIEW' && <option value="PENDING_REVIEW">Awaiting review</option>}
-            </Select>
-            <Checkbox label="Feature on the homepage" checked={v.isFeatured} onChange={(e) => setV({ ...v, isFeatured: e.target.checked })} />
-            <Button type="submit" block loading={save.isPending}>{product ? 'Save changes' : 'Create product'}</Button>
+            {vendor ? (
+              <>
+                <Select label="When I save" value={v.status} onChange={set('status')}>
+                  <option value="PENDING_REVIEW">Submit for review</option>
+                  <option value="DRAFT">Keep as draft (hidden)</option>
+                  <option value="ARCHIVED">Archive</option>
+                </Select>
+                <p className="text-xs text-muted">VÉLORA reviews every product before it goes on sale{product?.status === 'ACTIVE' ? '. Changes to a live product send it back for review' : ''}.</p>
+              </>
+            ) : (
+              <>
+                <Select label="Status" value={v.status} onChange={set('status')}>
+                  <option value="DRAFT">Draft (hidden)</option>
+                  <option value="ACTIVE">Active (on sale)</option>
+                  <option value="ARCHIVED">Archived</option>
+                  {product?.status === 'PENDING_REVIEW' && <option value="PENDING_REVIEW">Awaiting review</option>}
+                </Select>
+                <Checkbox label="Feature on the homepage" checked={v.isFeatured} onChange={(e) => setV({ ...v, isFeatured: e.target.checked })} />
+              </>
+            )}
+            <Button type="submit" block loading={save.isPending}>{vendor ? (v.status === 'PENDING_REVIEW' ? 'Save and submit' : 'Save') : product ? 'Save changes' : 'Create product'}</Button>
           </div>
         </Panel>
         <Panel title="Organisation">

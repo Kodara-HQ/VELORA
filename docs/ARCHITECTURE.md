@@ -37,7 +37,7 @@ Admin / Vendor portal ───────────────┘         �
 2. **Customer website** ✅
 3. **Administration** ✅
 4. **Payments, delivery and returns** ✅
-5. **Marketplace:** vendor onboarding, vendor portal, commissions, settlements
+5. **Marketplace** ✅
 6. **Advanced:** recommendations, loyalty, promotions and flash sales, Meilisearch, notifications, analytics
 7. **Mobile:** Expo app for Android and iOS with push notifications
 8. **Testing and deployment:** load and security testing, Docker images, backups, monitoring

@@ -167,7 +167,9 @@ describe('Marketplace (e2e)', () => {
     expect(await prisma.vendorSettlement.count({ where: { vendorId: A.vendorId } })).toBe(0); // still on hold
 
     await prisma.vendorCommission.update({ where: { id: commission.id }, data: { eligibleAt: new Date(Date.now() - 60_000) } });
-    const gen = await http('post', '/admin/settlements/generate', 'finance').send({ vendorId: A.vendorId });
+    const payable = await http('get', '/admin/settlements/payable', 'finance').expect(200);
+    expect(payable.body.data.find((p: { vendorId: number }) => p.vendorId === A.vendorId)).toMatchObject({ lines: 1, net: '108.00' });
+    const gen =await http('post', '/admin/settlements/generate', 'finance').send({ vendorId: A.vendorId });
     expect(gen.body.data.created).toHaveLength(1);
     await http('post', '/admin/settlements/generate', 'finance').send({ vendorId: A.vendorId }).expect(200);
     expect(await prisma.vendorSettlement.count({ where: { vendorId: A.vendorId } })).toBe(1); // lines can't be claimed twice
@@ -177,7 +179,10 @@ describe('Marketplace (e2e)', () => {
     await http('post', `/admin/settlements/${s.id}/pay`, 'finance').send({ payoutReference: 'MOMO-998877' }).expect(409); // not approved
     await http('post', `/admin/settlements/${s.id}/approve`, 'support').expect(403);
     await http('post', `/admin/settlements/${s.id}/approve`, 'finance').expect(200);
-    const paid = await http('post', `/admin/settlements/${s.id}/pay`, 'finance').send({ payoutReference: 'MOMO-998877' });
+    await http('post', `/admin/settlements/${s.id}/pay`, 'finance').send({ payoutReference: 'MOMO-998877' }).expect(409); // no payout details yet
+    await http('patch', '/vendor/profile', 'alpha').send({ payoutMethod: 'MOMO_MTN' }).expect(400); // method needs account details
+    await http('patch', '/vendor/profile', 'alpha').send({ payoutMethod: 'MOMO_MTN', payoutDetails: { accountName: 'Alpha Owner', number: '+233244000099' } }).expect(200);
+    const paid =await http('post', `/admin/settlements/${s.id}/pay`, 'finance').send({ payoutReference: 'MOMO-998877' });
     expect(paid.body.data.status).toBe('PAID');
     expect((await prisma.vendorCommission.findUniqueOrThrow({ where: { id: commission.id } })).status).toBe('SETTLED');
 

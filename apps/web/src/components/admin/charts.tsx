@@ -8,7 +8,7 @@ import { formatMoney } from '@/lib/format';
  * Thin columns with a 2px surface gap, rounded data-ends on the baseline, recessive grid,
  * per-column hover tooltip with a generous hit area, and a hidden data table for screen readers.
  */
-export function RevenueBars({ data, height = 220 }: { data: Array<{ date: string; revenue: string; orders: number }>; height?: number }) {
+export function RevenueBars({ data, height = 220, unit = 'order' }: { data: Array<{ date: string; revenue: string; orders: number }>; height?: number; unit?: string }) {
   const [hover, setHover] = useState<number | null>(null);
   const values = data.map((d) => Number(d.revenue));
   const max = niceMax(Math.max(...values, 1));
@@ -42,7 +42,7 @@ export function RevenueBars({ data, height = 220 }: { data: Array<{ date: string
           const y = padT + innerH - bh;
           const r = Math.min(4, barW / 2, bh);
           return (
-            <g key={d.date} onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} tabIndex={0} aria-label={`${d.date}: ${formatMoney(d.revenue)}, ${d.orders} orders`}>
+            <g key={d.date} onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} tabIndex={0} aria-label={`${d.date}: ${formatMoney(d.revenue)}, ${d.orders} ${unit}s`}>
               {/* Hit target is the full column slot, larger than the mark. */}
               <rect x={padL + i * slot} y={padT} width={slot} height={innerH} fill="transparent" />
               {bh > 0 && (
@@ -65,12 +65,12 @@ export function RevenueBars({ data, height = 220 }: { data: Array<{ date: string
           style={{ left: `clamp(0px, calc(${((padL + hover * slot) / W) * 100}% - 60px), calc(100% - 150px))` }}>
           <p className="font-semibold">{new Date(h.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</p>
           <p className="text-ink">{formatMoney(h.revenue)}</p>
-          <p className="text-muted">{h.orders} order{h.orders === 1 ? '' : 's'}</p>
+          <p className="text-muted">{h.orders} {unit}{h.orders === 1 ? '' : 's'}</p>
         </div>
       )}
       <table className="sr-only">
         <caption>Daily revenue</caption>
-        <thead><tr><th>Date</th><th>Revenue</th><th>Orders</th></tr></thead>
+        <thead><tr><th>Date</th><th>Revenue</th><th>{unit[0].toUpperCase() + unit.slice(1)}s</th></tr></thead>
         <tbody>{data.map((d) => <tr key={d.date}><td>{d.date}</td><td>{d.revenue}</td><td>{d.orders}</td></tr>)}</tbody>
       </table>
     </div>

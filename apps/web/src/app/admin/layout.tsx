@@ -26,6 +26,11 @@ const ADMIN_NAV: Array<{ section: string; items: Array<{ href: string; label: st
     { href: '/admin/refunds', label: 'Refunds', perm: P.REFUNDS_PROCESS },
     { href: '/admin/payments', label: 'Payments', perm: P.PAYMENTS_VIEW },
   ] },
+  { section: 'Marketplace', items: [
+    { href: '/admin/vendors', label: 'Vendors', perm: P.VENDORS_VIEW },
+    { href: '/admin/vendor-applications', label: 'Applications', perm: P.VENDORS_VIEW },
+    { href: '/admin/settlements', label: 'Settlements', perm: P.SETTLEMENTS_MANAGE },
+  ] },
   { section: 'Catalogue', items: [
     { href: '/admin/products', label: 'Products', perm: P.PRODUCTS_VIEW },
     { href: '/admin/categories', label: 'Categories & brands', perm: P.PRODUCTS_VIEW },
@@ -162,7 +167,7 @@ function Notifications({ enabled }: { enabled: boolean }) {
     { n: c.ordersToFulfil, label: 'orders to fulfil', href: '/admin/orders?view=open' },
     { n: c.lowStockVariants, label: 'variants low or out of stock', href: '/admin/inventory?stock=low' },
     { n: c.productsToReview, label: 'vendor products awaiting review', href: '/admin/products?status=PENDING_REVIEW' },
-    { n: c.vendorApplications, label: 'vendor applications', href: '/admin' },
+    { n: c.vendorApplications, label: 'vendor applications', href: '/admin/vendor-applications?status=SUBMITTED' },
   ].filter((i) => i.n > 0) : [];
   const total = items.reduce((s, i) => s + i.n, 0);
   return (

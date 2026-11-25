@@ -106,7 +106,7 @@ export class VendorsService {
     });
     await this.audit.log({ userId: user.id, action: 'vendor_applications.submitted', entityType: 'vendor_application', entityId: app.id, ctx });
     await this.notifications.notify(await this.notifications.staffWith(PERMISSIONS.VENDORS_APPROVE), {
-      type: 'vendor.application', title: 'New vendor application', body: `${dto.businessName} applied to sell on VÉLORA.`, data: { href: `/admin/vendors/applications/${app.id}` },
+      type: 'vendor.application', title: 'New vendor application', body: `${dto.businessName} applied to sell on VÉLORA.`, data: { href: `/admin/vendor-applications/${app.id}` },
     });
     return this.myApplication(user.id);
   }
@@ -250,13 +250,13 @@ export class VendorsService {
   // Settlements
 
   async payablePreview() {
-    const rows = await this.prisma.$queryRaw<Array<{ vendor_id: number; lines: bigint; gross: Prisma.Decimal; commission: Prisma.Decimal; net: Prisma.Decimal; oldest: Date }>>`
-      SELECT vendor_id, COUNT(*) AS lines, SUM(gross_amount) AS gross, SUM(commission_amount) AS commission, SUM(net_amount) AS net, MIN(eligible_at) AS oldest
+    const rows = await this.prisma.$queryRaw<Array<{ vendor_id: number; line_count: bigint; gross: Prisma.Decimal; commission: Prisma.Decimal; net: Prisma.Decimal; oldest: Date }>>`
+      SELECT vendor_id, COUNT(*) AS line_count, SUM(gross_amount) AS gross, SUM(commission_amount) AS commission, SUM(net_amount) AS net, MIN(eligible_at) AS oldest
       FROM vendor_commissions WHERE status = 'ELIGIBLE' AND eligible_at <= NOW() AND settlement_id IS NULL GROUP BY vendor_id`;
     const vendors = await this.prisma.vendor.findMany({ where: { id: { in: rows.map((r) => Number(r.vendor_id)) } }, select: { id: true, businessName: true, payoutMethod: true, status: true } });
     return rows.map((r) => {
       const v = vendors.find((x) => x.id === Number(r.vendor_id));
-      return { vendorId: Number(r.vendor_id), vendor: v?.businessName, vendorStatus: v?.status, payoutMethod: v?.payoutMethod, lines: Number(r.lines),
+      return { vendorId: Number(r.vendor_id), vendor: v?.businessName, vendorStatus: v?.status, payoutMethod: v?.payoutMethod, lines: Number(r.line_count),
         gross: Number(r.gross).toFixed(2), commission: Number(r.commission).toFixed(2), net: Number(r.net).toFixed(2), oldest: r.oldest };
     });
   }
@@ -324,6 +324,7 @@ export class VendorsService {
   async paySettlement(staff: AuthUser, id: number, ref: string, ctx: RequestContext) {
     const s = await this.prisma.vendorSettlement.findUnique({ where: { id }, include: { vendor: true } });
     if (!s) throw new NotFoundException('Settlement not found');
+    if (!s.vendor.payoutMethod || !s.vendor.payoutDetails) throw new ConflictException('This vendor has no payout details yet; they add them in the vendor portal');
     await this.prisma.$transaction(async (tx) => {
       const r = await tx.vendorSettlement.updateMany({ where: { id, status: SettlementStatus.APPROVED }, data: { status: SettlementStatus.PAID, paidAt: new Date(), payoutReference: ref } });
       if (r.count !== 1) throw new ConflictException('Approve the statement before recording payment');

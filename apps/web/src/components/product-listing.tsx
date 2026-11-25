@@ -21,14 +21,15 @@ export function toQuery(sp: Search, extra: Record<string, string | undefined> = 
 }
 
 /** Server-rendered listing shared by department, shop-all and search pages. */
-export async function ProductListing({ title, eyebrow, intro, category, q, searchParams, basePath, crumbs, subnav }: {
-  title: string; eyebrow?: string; intro?: string; category?: string; q?: string; searchParams: Search; basePath: string;
+export async function ProductListing({ title, eyebrow, intro, category, q, vendor, searchParams, basePath, crumbs, subnav }: {
+  title: string; eyebrow?: string; intro?: string; category?: string; q?: string; vendor?: string; searchParams: Search; basePath: string;
   crumbs?: Array<{ name: string; href: string }>; subnav?: Array<{ name: string; href: string; active?: boolean }>;
 }) {
-  const query = toQuery(searchParams, { category, q });
+  const query = toQuery(searchParams, { category, q, vendor });
   const facetQuery = new URLSearchParams();
   if (category) facetQuery.set('category', category);
   if (q) facetQuery.set('q', q);
+  if (vendor) facetQuery.set('vendor', vendor);
   const [{ data: products, meta }, { data: facets }] = await Promise.all([
     serverApi<ProductCard[]>(`/products?${query}`, { notFoundOn404: true }),
     serverApi<Facets>(`/products/facets?${facetQuery}`, { notFoundOn404: true }),

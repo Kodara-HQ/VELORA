@@ -66,7 +66,7 @@ export function ProductHero({ product }: { product: ProductDetail }) {
             <a href="#reviews" className="flex items-center gap-2 hover:text-ink"><Stars rating={product.rating} /> {product.rating.toFixed(1)} · {product.reviewCount} reviews</a>
           )}
           <span>Style {product.styleCode}</span>
-          {product.vendor && <Badge tone="outline">Sold by {product.vendor.name}</Badge>}
+          {product.vendor && <a href={`/v/${product.vendor.slug}`} className="hover:text-ink"><Badge tone="outline">Sold by {product.vendor.name}</Badge></a>}
         </div>
         {product.shortDescription && <p className="mt-5 leading-relaxed text-muted">{product.shortDescription}</p>}
         <div className="mt-6">
