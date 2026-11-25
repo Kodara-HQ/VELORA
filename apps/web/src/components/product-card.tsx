@@ -54,7 +54,7 @@ export function ProductCard({ product, priority = false }: { product: Card; prio
           )}
         </Link>
         <div className="pointer-events-none absolute left-2 top-2 flex flex-col gap-1">
-          {!!off && <Badge tone="rose">-{off}%</Badge>}
+          {product.promotion?.type === 'FLASH_SALE' ? <Badge tone="ink">⚡ Flash -{product.promotion.percentOff}%</Badge> : !!off && <Badge tone="rose">-{off}%</Badge>}
           {product.isNew && <Badge tone="ink">New</Badge>}
           {!product.inStock && <Badge tone="neutral">Sold out</Badge>}
         </div>
@@ -81,6 +81,7 @@ export function ProductCard({ product, priority = false }: { product: Card; prio
           <Link href={`/p/${product.slug}`} className="hover:underline hover:underline-offset-4">{product.name}</Link>
         </h3>
         <Price price={product.price} compareAt={product.compareAtPrice} currency={product.currency} className="text-sm" />
+        {product.promotion?.stockLeft != null && product.promotion.stockLeft <= 10 && <p className="text-xs font-semibold text-rose-deep">Only {product.promotion.stockLeft} left at this price</p>}
         <div className="flex items-center justify-between gap-2 pt-0.5">
           {product.colors.length > 1 ? (
             <span className="flex items-center gap-1" aria-label={`${product.colors.length} colours`}>

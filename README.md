@@ -126,6 +126,39 @@ A fashion, beauty and lifestyle marketplace for Ghana, built to grow internation
 - **Shop pages:** each vendor has a public page at `/v/<slug>`, linked from "Sold by" on product pages.
 - 78 end-to-end API tests, including vendor-isolation tests.
 
+**Phase 6: Growth** is complete.
+
+- **Promotions and flash sales** (`/admin/promotions`):
+  - Percentage, amount-off and flash-sale prices on chosen products, with an optional fixed sale price and a unit limit per product.
+  - Prices are applied on the server everywhere: cards, product pages, bag and checkout. They switch the moment a sale starts, is paused or ends.
+  - Limited units are claimed atomically at checkout, so a sale never oversells, and cancelling an order gives its units back.
+  - Shoppers see a countdown band on the home page, a sale page at `/sale/<slug>`, and "only N left at this price" messages.
+  - Coupons are managed at `/admin/coupons`.
+- **Loyalty** (`/account/loyalty`):
+  - Tiers (Bronze 1×, Silver 1.25×, Gold 1.5×, Platinum 2×) multiply the points earned on delivered orders.
+  - Points can pay for up to half an order at checkout, within the rules in system settings.
+  - Points come back on cancellation, and in proportion on refunds.
+  - Referral links reward both friends once, on the friend's first delivered order.
+  - Staff can adjust points; every adjustment is audited.
+- **Reviews:**
+  - Verified buyers review delivered items at `/account/reviews`.
+  - Staff moderate them at `/admin/reviews`; approval recalculates the product rating and pays a one-time bonus.
+- **Smart search:**
+  - Synonyms ("trainers" finds sneakers), plural handling and field-weighted relevance ranking.
+  - "Did you mean" typo correction ("blazr" finds blazers).
+  - Meilisearch is used when `MEILI_HOST` is reachable; otherwise the built-in engine.
+  - Searches with no results are reported to staff.
+- **Recommendations:** "Picked for you" weighs purchases, wishlist and browsing, and stays near the shopper's usual price point.
+- **Email and SMS:**
+  - Order confirmations, dispatch, delivery, cancellation and refund messages go into an outbox inside the same transaction as the order change.
+  - A worker sends them with retries and back-off, using SMTP and Hubtel SMS, or the log in development.
+  - Customers choose their channels at `/account/notifications`.
+  - Staff see every message and can send opted-in campaigns at `/admin/messages`.
+- **Analytics** (`/admin/analytics`): the shopping funnel, sales by department and region, new vs returning customers, most-viewed products and their conversion, searches, promotion and coupon performance, and loyalty liability.
+- 88 end-to-end API tests.
+
+Demo data includes a live "Weekend Flash Sale" and a scheduled "Kente Week" (dates are relative to when the seed runs; run `npx prisma db seed` again to restart an expired demo sale).
+
 The remaining phases are listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Running locally

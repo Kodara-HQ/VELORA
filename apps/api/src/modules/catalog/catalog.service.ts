@@ -2,8 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Paginated } from '../../common/dto/pagination.dto';
-import { cardSelect, sortSizes, toCard, visibleWhere } from './product-card';
+import { cardSelect, sortSizes, visibleWhere } from './product-card';
+import { activePromotionWhere, toCards } from '../promotions/promo-pricing';
 import type { FacetQuery, ProductQuery, Sort } from './catalog.dto';
+import { SearchService, type SearchResult } from './search.service';
+import type { PaginationMeta } from '@velora/shared';
 
 export const ORDER_BY: Record<Sort, Prisma.ProductOrderByWithRelationInput[]> = {
   recommended: [{ isFeatured: 'desc' }, { soldCount: 'desc' }, { id: 'desc' }],
@@ -35,7 +38,10 @@ interface CategoryCache {
 export class CatalogService {
   private cache: CategoryCache | null = null;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly search: SearchService,
+  ) {}
 
   // ─── Categories & brands ───
 
@@ -115,36 +121,20 @@ export class CatalogService {
     return rows.map((r) => Number(r.product_id));
   }
 
-  private searchWhere(q?: string): Prisma.ProductWhereInput | null {
-    const term = q?.trim();
-    if (!term) return null;
-    // Every word must match the name, brand, category or material.
-    return {
-      AND: term.split(/\s+/).slice(0, 5).map((w) => ({
-        OR: [
-          { name: { contains: w } },
-          { brand: { name: { contains: w } } },
-          { category: { name: { contains: w } } },
-          { material: { contains: w } },
-        ],
-      })),
-    };
-  }
-
-  private async baseWhere(category?: string, q?: string): Promise<Prisma.ProductWhereInput[]> {
+  private async baseWhere(category?: string, found?: SearchResult | null): Promise<Prisma.ProductWhereInput[]> {
     const and: Prisma.ProductWhereInput[] = [visibleWhere()];
     if (category) {
       const ids = await this.descendantIds(category);
       if (!ids) throw new NotFoundException('Category not found');
       and.push({ categoryId: { in: ids } });
     }
-    const search = this.searchWhere(q);
-    if (search) and.push(search);
+    if (found) and.push({ id: { in: found.ids } });
     return and;
   }
 
   async list(q: ProductQuery) {
-    const and = await this.baseWhere(q.category, q.q);
+    const found = q.q?.trim() ? await this.search.search(q.q) : null;
+    const and = await this.baseWhere(q.category, found);
     if (q.brand?.length) and.push({ brand: { slug: { in: q.brand } } });
     if (q.vendor) and.push({ vendor: { slug: q.vendor } });
     if (q.color?.length || q.size?.length) {
@@ -161,23 +151,39 @@ export class CatalogService {
     if (q.minPrice != null || q.maxPrice != null) {
       and.push({ basePrice: { ...(q.minPrice != null && { gte: q.minPrice }), ...(q.maxPrice != null && { lte: q.maxPrice }) } });
     }
-    if (q.onSale) and.push({ compareAtPrice: { not: null } });
+    if (q.onSale) and.push({ OR: [{ compareAtPrice: { not: null } }, { promotionProducts: { some: { promotion: activePromotionWhere() } } }] });
+    if (q.promotion) and.push({ promotionProducts: { some: { promotion: { ...activePromotionWhere(), slug: q.promotion } } } });
     if (q.minRating) and.push({ avgRating: { gte: q.minRating } });
     if (q.inStock) and.push({ id: { in: await this.inStockProductIds() } });
 
     const where: Prisma.ProductWhereInput = { AND: and };
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.product.findMany({ where, select: cardSelect, orderBy: ORDER_BY[q.sort], skip: q.skip, take: q.pageSize }),
-      this.prisma.product.count({ where }),
-    ]);
+    let rows;
+    let total: number;
+    if (found && q.sort === 'recommended') {
+      // Searches default to relevance order: the search engine ranks, the database filters.
+      const allowed = new Set((await this.prisma.product.findMany({ where, select: { id: true } })).map((r) => r.id));
+      const ordered = found.ids.filter((id) => allowed.has(id));
+      total = ordered.length;
+      const pageIds = ordered.slice(q.skip, q.skip + q.pageSize);
+      const byId = new Map((await this.prisma.product.findMany({ where: { id: { in: pageIds } }, select: cardSelect })).map((r) => [r.id, r]));
+      rows = pageIds.map((id) => byId.get(id)!).filter(Boolean);
+    } else {
+      [rows, total] = await this.prisma.$transaction([
+        this.prisma.product.findMany({ where, select: cardSelect, orderBy: ORDER_BY[q.sort], skip: q.skip, take: q.pageSize }),
+        this.prisma.product.count({ where }),
+      ]);
+    }
     if (q.q && q.page === 1) void this.recordSearch(q.q, total);
-    return new Paginated(rows.map(toCard), total, q);
+    const page = new Paginated(await toCards(this.prisma, rows), total, q);
+    if (found) (page.meta as PaginationMeta & { search?: unknown }).search = { query: found.query, correctedFrom: found.correctedFrom, engine: found.engine };
+    return page;
   }
 
   /** Filter options for a category or search, with counts. */
   async facets(q: FacetQuery) {
-    const base = await this.baseWhere(q.category, q.q);
+    const base = await this.baseWhere(q.category, q.q?.trim() ? await this.search.search(q.q) : null);
     if (q.vendor) base.push({ vendor: { slug: q.vendor } });
+    if (q.promotion) base.push({ promotionProducts: { some: { promotion: { ...activePromotionWhere(), slug: q.promotion } } } });
     const where: Prisma.ProductWhereInput = { AND: base };
     const [brandGroups, price, variants] = await Promise.all([
       this.prisma.product.groupBy({ by: ['brandId'], where, _count: { _all: true } }),
@@ -213,7 +219,7 @@ export class CatalogService {
 
   async suggest(raw: string) {
     const q = raw.trim();
-    if (q.length < 2) return { products: [], categories: [], brands: [] };
+    if (q.length < 2) return { products: [], categories: [], brands: [], didYouMean: null };
     const [products, categories, brands] = await Promise.all([
       this.prisma.product.findMany({
         where: { AND: [visibleWhere(), { OR: [{ name: { contains: q } }, { brand: { name: { contains: q } } }] }] },
@@ -229,6 +235,7 @@ export class CatalogService {
       this.prisma.brand.findMany({ where: { deletedAt: null, name: { contains: q } }, select: { name: true, slug: true }, take: 3 }),
     ]);
     return {
+      didYouMean: products.length || categories.length || brands.length ? null : await this.search.didYouMean(q),
       products: products.map((p) => ({ slug: p.slug, name: p.name, price: p.basePrice.toFixed(2), currency: p.currency, image: p.images[0]?.url ?? null })),
       categories: categories.map((c) => ({ name: c.name, slug: c.slug, parent: c.parent?.name ?? null })),
       brands,

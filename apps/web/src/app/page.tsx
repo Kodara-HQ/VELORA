@@ -6,6 +6,8 @@ import { NewsletterForm } from '@/components/newsletter';
 import { ShieldIcon, TruckIcon, ReturnIcon } from '@/components/icons';
 import { ButtonLink, Container } from '@/components/ui';
 import { serverApi } from '@/lib/server-api';
+import { FlashSaleBand } from '@/components/flash-sale';
+import type { LiveSale } from '@/lib/types';
 import type { ProductCard } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +25,10 @@ interface HomeFeed {
 const TILE_TONES = ['bg-rose-soft', 'bg-sand', 'bg-paper'];
 
 export default async function HomePage() {
-  const { data } = await serverApi<HomeFeed>('/storefront/home');
+  const [{ data }, { data: sales }] = await Promise.all([
+    serverApi<HomeFeed>('/storefront/home'),
+    serverApi<LiveSale[]>('/promotions/live').catch(() => ({ data: [] as LiveSale[] })),
+  ]);
   const hero = data.featured[0];
 
   return (
@@ -85,6 +90,8 @@ export default async function HomePage() {
             ))}
           </ul>
         </section>
+
+        <FlashSaleBand sales={sales} />
 
         <ProductRail eyebrow="Just landed" title="New arrivals" href="/shop?sort=newest" products={data.newArrivals} />
 

@@ -7,6 +7,7 @@ import { OrderStatus, PaymentMethod, PaymentProvider, PaymentStatus, PaymentTxnS
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.module';
+import { MessagingService } from '../notifications/messaging.service';
 import { OrderLifecycleService } from '../orders/order-lifecycle.service';
 import type { Env } from '../../config/env';
 import type { ViewerRef } from '../../common/viewer';
@@ -31,6 +32,7 @@ export class PaymentsService implements OnApplicationBootstrap, OnModuleDestroy 
     readonly paystack: PaystackGateway,
     private readonly hubtel: HubtelGateway,
     private readonly simulator: SimulatorGateway,
+    private readonly messaging: MessagingService,
   ) {}
 
   // ─── Gateways ───
@@ -174,6 +176,7 @@ export class PaymentsService implements OnApplicationBootstrap, OnModuleDestroy 
       if (order.status === OrderStatus.PENDING_PAYMENT) {
         await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.PAID, paymentStatus: PaymentStatus.PAID, paidAt: new Date(), paymentDueAt: null } });
         await tx.orderStatusHistory.create({ data: { orderId: order.id, fromStatus: order.status, toStatus: OrderStatus.PAID, note: `Payment confirmed by ${label}` } });
+        await this.messaging.orderEvent(tx, order.id, 'paid');
         if (order.userId) await tx.customer.updateMany({ where: { userId: order.userId }, data: { orderCount: { increment: 1 }, lastOrderAt: new Date() } });
       } else {
         // Paid after the order expired or was cancelled (or a second payment for a paid order): refund it.

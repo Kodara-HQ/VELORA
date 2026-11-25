@@ -52,6 +52,10 @@ export default function CheckoutPage() {
   const [methodId, setMethodId] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const [payMethod, setPayMethod] = useState('');
+  // Loyalty: the shopper opts in; we apply the most points the order allows (capped server-side).
+  const [usePoints, setUsePoints] = useState(false);
+  const [maxPoints, setMaxPoints] = useState(0);
+  const redeemPoints = usePoints && maxPoints > 0 ? maxPoints : undefined;
   const payMethods = useQuery({ queryKey: ['payment-methods'], queryFn: () => api<PaymentMethodOption[]>('/checkout/payment-methods', { auth: false }), staleTime: 300_000 });
   useEffect(() => {
     if (payMethods.data?.length && !payMethods.data.some((m) => m.code === payMethod)) setPayMethod(payMethods.data[0].code);
@@ -83,10 +87,16 @@ export default function CheckoutPage() {
   }, [options.data, methodId]);
 
   const quote = useQuery({
-    queryKey: ['quote', region, methodId, cart.data?.estimatedTotal, contact.email],
-    queryFn: () => api<Quote>('/checkout/quote', { method: 'POST', body: { region, shippingMethodId: methodId ?? undefined, ...(status !== 'authenticated' && contact.email && { email: contact.email }) } }),
+    queryKey: ['quote', region, methodId, cart.data?.estimatedTotal, contact.email, redeemPoints],
+    queryFn: () => api<Quote>('/checkout/quote', { method: 'POST', body: { region, shippingMethodId: methodId ?? undefined, redeemPoints, ...(status !== 'authenticated' && contact.email && { email: contact.email }) } }),
     enabled: !!region && !!methodId && step >= 3,
+    retry: false,
   });
+  useEffect(() => { if (quote.data?.loyalty) setMaxPoints(quote.data.loyalty.maxPoints); }, [quote.data?.loyalty]);
+  // If the allowance changed under us (bag edited, points spent elsewhere), start again without points.
+  useEffect(() => {
+    if (quote.error instanceof ApiError && quote.error.code === 'POINTS_UNAVAILABLE') { setUsePoints(false); setMaxPoints(0); }
+  }, [quote.error]);
 
   const place = useMutation({
     mutationFn: () => api<PlacedOrder>('/checkout/orders', {
@@ -99,6 +109,7 @@ export default function CheckoutPage() {
         paymentMethod: payMethod,
         ...(note.trim() && { note: note.trim() }),
         expectedTotal: quote.data?.grandTotal,
+        redeemPoints,
       },
     }),
     onSuccess: (order) => {
@@ -111,7 +122,7 @@ export default function CheckoutPage() {
       else router.replace(`/order/${order.orderNumber}${order.paymentError ? '?payError=1' : ''}`);
     },
     onError: (e) => {
-      if (e instanceof ApiError && ['PRICE_CHANGED', 'COUPON_INVALID', 'CART_ISSUES', 'INSUFFICIENT_STOCK'].includes(e.code)) {
+      if (e instanceof ApiError && ['PRICE_CHANGED', 'COUPON_INVALID', 'CART_ISSUES', 'INSUFFICIENT_STOCK', 'POINTS_UNAVAILABLE'].includes(e.code)) {
         void qc.invalidateQueries({ queryKey: ['quote'] });
         void cart.refetch();
       }
@@ -137,9 +148,16 @@ export default function CheckoutPage() {
       </ul>
       <div className="mt-5 space-y-2 border-t border-line pt-4">
         <Row label="Subtotal" value={formatMoney(totals?.subtotal ?? cart.data?.subtotal ?? '0')} />
-        {Number(totals?.discountTotal ?? cart.data?.discountTotal ?? 0) > 0 && (
-          <Row label={`Discount${cart.data?.coupon ? ` (${cart.data.coupon.code})` : ''}`} value={`−${formatMoney(totals?.discountTotal ?? cart.data!.discountTotal)}`} accent />
-        )}
+        {(() => {
+          const pts = totals?.loyalty?.points ? Number(totals.loyalty.value) : 0;
+          const coupon = Number(totals?.discountTotal ?? cart.data?.discountTotal ?? 0) - pts;
+          return (
+            <>
+              {coupon > 0.004 && <Row label={`Discount${cart.data?.coupon ? ` (${cart.data.coupon.code})` : ''}`} value={`−${formatMoney(coupon.toFixed(2))}`} accent />}
+              {pts > 0 && <Row label={`Points (${totals!.loyalty!.points.toLocaleString()})`} value={`−${formatMoney(totals!.loyalty!.value)}`} accent />}
+            </>
+          );
+        })()}
         <Row label="Delivery" value={totals ? (Number(totals.shippingTotal) === 0 ? 'Free' : formatMoney(totals.shippingTotal)) : '—'} />
         {totals && Number(totals.taxTotal) > 0 && <Row label="Tax" value={formatMoney(totals.taxTotal)} />}
         <div className="border-t border-line pt-3"><Row label="Total" value={totals ? formatMoney(totals.grandTotal) : formatMoney(cart.data?.estimatedTotal ?? '0')} strong /></div>
@@ -246,6 +264,20 @@ export default function CheckoutPage() {
           </Step>
 
           <Step n={4} title="Payment & review" active={step === 3} done={false}>
+            {status === 'authenticated' && quote.data?.loyalty && quote.data.loyalty.balance > 0 && (
+              <div className="mb-6 rounded-sm border border-line bg-ivory p-4 text-sm">
+                <p className="font-semibold">VÉLORA Rewards · {quote.data.loyalty.balance.toLocaleString()} points</p>
+                {maxPoints > 0 ? (
+                  <label className="mt-2 flex cursor-pointer items-start gap-3">
+                    <input type="checkbox" className="mt-1 accent-ink" checked={usePoints} onChange={(e) => setUsePoints(e.target.checked)} disabled={quote.isFetching} />
+                    <span>
+                      Use {maxPoints.toLocaleString()} points{usePoints && quote.data.loyalty.points ? <> to save <b>{formatMoney(quote.data.loyalty.value)}</b></> : ''}
+                      <span className="block text-xs text-muted">Points can pay for up to half of your items. You’ll still earn points on what you pay.</span>
+                    </span>
+                  </label>
+                ) : <p className="mt-1 text-xs text-muted">Not enough points to use on this order yet. <Link href="/account/loyalty" className="underline">How rewards work</Link></p>}
+              </div>
+            )}
             <fieldset>
               <legend className="mb-3 text-xs font-semibold uppercase tracking-[0.12em]">Payment method</legend>
               {payMethods.isPending ? <Skeleton className="h-20" /> : payMethods.isError ? <Alert tone="danger">{errorMessage(payMethods.error)}</Alert> : (

@@ -26,6 +26,10 @@ import { ReturnsModule } from './modules/returns/returns.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { VendorsModule } from './modules/vendors/vendors.module';
 import { VendorPortalModule } from './modules/vendors/vendor-portal.module';
+import { LoyaltyModule } from './modules/loyalty/loyalty.module';
+import { PromotionsModule } from './modules/promotions/promotions.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
+import { AdminAnalyticsModule } from './modules/admin/admin-analytics.module';
 import { JwtAuthGuard, PermissionsGuard } from './common/guards/auth.guards';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor';
@@ -55,6 +59,10 @@ import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor'
     NotificationsModule,
     VendorsModule,
     VendorPortalModule,
+    LoyaltyModule,
+    PromotionsModule,
+    ReviewsModule,
+    AdminAnalyticsModule,
     UploadsModule,
     AdminDashboardModule,
     AdminCatalogModule,

@@ -379,6 +379,11 @@ async function seedCommerceConfig() {
     { group: 'orders', key: 'unpaidOrderTtlMinutes', value: 60, isPublic: false, description: 'Release reserved stock for unpaid orders after this' },
     { group: 'loyalty', key: 'pointsPerCedi', value: 1, isPublic: true, description: 'Points earned per GH₵1 spent' },
     { group: 'loyalty', key: 'cediPerPoint', value: 0.05, isPublic: true, description: 'Redemption value of one point' },
+    { group: 'loyalty', key: 'minRedeemPoints', value: 200, isPublic: true, description: 'Smallest number of points that can be redeemed' },
+    { group: 'loyalty', key: 'maxRedeemPercent', value: 50, isPublic: true, description: 'Most of an order (merchandise, %) payable with points' },
+    { group: 'loyalty', key: 'referralBonusPoints', value: 500, isPublic: true, description: 'Points for the referrer when a referred friend’s first order is delivered' },
+    { group: 'loyalty', key: 'refereeBonusPoints', value: 250, isPublic: true, description: 'Points for the new customer on their first delivered order' },
+    { group: 'loyalty', key: 'reviewBonusPoints', value: 50, isPublic: true, description: 'Points for each approved product review' },
     { group: 'marketplace', key: 'defaultCommissionRate', value: 15, isPublic: false, description: 'Default vendor commission %' },
     { group: 'marketplace', key: 'settlementHoldDays', value: 14, isPublic: false, description: 'Days before vendor earnings become payable' },
   ];
@@ -606,6 +611,40 @@ async function seedOrderHistory() {
   console.log(`✓ ${made} historical orders`);
 }
 
+
+/** Demo promotions: a flash sale running now and a sale starting soon (dates relative to when the seed runs). */
+async function seedPromotions() {
+  if (process.env.SEED_SKIP_DEMO_PROMOTIONS === '1') return; // e2e tests create their own promotions
+  const now = Date.now();
+  const H = 3_600_000;
+  const pick = async (slugs: string[]) => (await prisma.product.findMany({ where: { slug: { in: slugs } }, select: { id: true, slug: true, basePrice: true } }));
+  const flash = await prisma.promotion.findUnique({ where: { slug: 'weekend-flash-sale' } });
+  if (!flash || flash.endsAt.getTime() < now) {
+    const products = await pick(['satin-wrap-midi-dress', 'leather-court-sneakers', 'structured-top-handle-bag', 'ankara-print-peplum-top', 'krobo-bead-drop-earrings', 'relaxed-linen-shirt']);
+    if (flash) await prisma.promotion.delete({ where: { id: flash.id } });
+    await prisma.promotion.create({
+      data: {
+        name: 'Weekend Flash Sale', slug: 'weekend-flash-sale', type: 'FLASH_SALE', value: 25, priority: 10,
+        headline: '25% off selected pieces, while stocks last', campaign: 'weekend',
+        startsAt: new Date(now - H), endsAt: new Date(now + 72 * H),
+        products: { create: products.map((p, i) => ({ productId: p.id, stockLimit: i % 2 === 0 ? 15 : null })) },
+      },
+    });
+  }
+  if (!(await prisma.promotion.findUnique({ where: { slug: 'kente-week' } }))) {
+    const products = await pick(['kente-panel-midi-skirt', 'embroidered-fugu-smock', 'satin-headwrap']);
+    await prisma.promotion.create({
+      data: {
+        name: 'Kente Week', slug: 'kente-week', type: 'PERCENTAGE_OFF', value: 15, priority: 5,
+        headline: '15% off handwoven and heritage pieces', campaign: 'heritage',
+        startsAt: new Date(now + 48 * H), endsAt: new Date(now + 9 * 24 * H),
+        products: { create: products.map((p) => ({ productId: p.id })) },
+      },
+    });
+  }
+  console.log('✓ promotions (flash sale live, Kente Week scheduled)');
+}
+
 async function main() {
   await seedAccessControl();
   await seedUsers();
@@ -616,6 +655,7 @@ async function main() {
   await seedProducts(vendor.id);
   await seedCommerceConfig();
   await seedStorefront();
+  await seedPromotions();
   await seedOrderHistory();
 }
 

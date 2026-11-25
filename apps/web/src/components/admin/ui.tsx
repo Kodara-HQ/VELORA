@@ -120,6 +120,7 @@ export function TextArea({ label, error, ...rest }: TextareaHTMLAttributes<HTMLT
 const STATUS_TONE: Record<string, 'neutral' | 'ink' | 'rose' | 'success' | 'danger' | 'outline'> = {
   ACTIVE: 'success', DELIVERED: 'success', COMPLETED: 'success', RECEIVED: 'success', PAID: 'success', SUCCESS: 'success',
   DRAFT: 'neutral', PENDING: 'neutral', PENDING_PAYMENT: 'neutral', ORDERED: 'neutral', IN_TRANSIT: 'ink', SHIPPED: 'ink', PROCESSING: 'rose', PARTIALLY_RECEIVED: 'rose',
+  LIVE: 'success', SCHEDULED: 'ink', PAUSED: 'neutral', ENDED: 'outline', EXPIRED: 'outline', INACTIVE: 'neutral', QUEUED: 'neutral', SENT: 'success',
   PENDING_REVIEW: 'rose', ARCHIVED: 'outline', CANCELLED: 'danger', REJECTED: 'danger', SUSPENDED: 'danger', FAILED: 'danger', REFUNDED: 'outline', UNPAID: 'outline',
 };
 export const humanize = (s: string) => s.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());

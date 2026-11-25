@@ -13,6 +13,7 @@ interface Suggestions {
   products: Array<{ slug: string; name: string; price: string; currency: string; image: string | null }>;
   categories: Array<{ name: string; slug: string; parent: string | null }>;
   brands: Array<{ name: string; slug: string }>;
+  didYouMean?: string | null;
 }
 
 type Option = { key: string; label: string; href: string; kind: 'term' | 'product' | 'category' | 'brand'; meta?: string; image?: string | null };
@@ -47,6 +48,7 @@ export function SearchBox({ className, autoFocus, onNavigate }: { className?: st
 
   const options: Option[] = term.length >= 2 && suggest.data
     ? [
+        ...(suggest.data.didYouMean ? [{ key: `d${suggest.data.didYouMean}`, kind: 'term' as const, label: `Did you mean “${suggest.data.didYouMean}”?`, href: `/search?q=${encodeURIComponent(suggest.data.didYouMean)}` }] : []),
         ...suggest.data.categories.map((c) => ({ key: `c${c.slug}`, kind: 'category' as const, label: c.name, meta: c.parent ? `in ${c.parent}` : 'Department', href: `/c/${c.slug}` })),
         ...suggest.data.brands.map((b) => ({ key: `b${b.slug}`, kind: 'brand' as const, label: b.name, meta: 'Brand', href: `/search?q=${encodeURIComponent(b.name)}` })),
         ...suggest.data.products.map((p) => ({ key: `p${p.slug}`, kind: 'product' as const, label: p.name, meta: formatMoney(p.price, p.currency), image: p.image, href: `/p/${p.slug}` })),

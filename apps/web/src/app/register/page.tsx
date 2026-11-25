@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState, type FormEvent } from 'react';
 import { AuthShell } from '@/components/auth-shell';
 import { Alert, Button, Checkbox, Field } from '@/components/ui';
 import { api, ApiError, type SessionPayload } from '@/lib/api';
@@ -11,7 +11,12 @@ import { useSession } from '@/lib/session';
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).{10,128}$/;
 
 export default function RegisterPage() {
+  return <Suspense><RegisterForm /></Suspense>;
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const ref = useSearchParams().get('ref')?.toUpperCase().slice(0, 20) ?? '';
   const signIn = useSession((s) => s.signIn);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -27,6 +32,7 @@ export default function RegisterPage() {
       phone: String(f.get('phone') ?? '').replace(/\s+/g, '') || undefined,
       password: String(f.get('password') ?? ''),
       marketingOptIn: f.get('marketingOptIn') === 'on',
+      referralCode: String(f.get('referralCode') ?? '').trim().toUpperCase() || undefined,
     };
     // Client-side checks for instant feedback; the API validates everything again.
     const local: Record<string, string> = {};
@@ -64,6 +70,7 @@ export default function RegisterPage() {
           hint="Optional. Used for delivery updates." error={errors.phone} />
         <Field label="Password" name="password" type="password" autoComplete="new-password" required
           hint="At least 10 characters, with a letter and a number." error={errors.password} />
+        <Field label="Referral code" name="referralCode" defaultValue={ref} autoComplete="off" hint={ref ? 'A friend invited you: you’ll both get bonus points after your first order.' : 'Optional. Got one from a friend? Enter it here.'} error={errors.referralCode} />
         <Checkbox name="marketingOptIn" label="Send me new arrivals, sales and member offers. Unsubscribe any time." />
         <Button type="submit" size="lg" block loading={loading}>Create account</Button>
         <p className="text-center text-sm text-muted">

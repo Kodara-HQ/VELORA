@@ -75,6 +75,7 @@ export function CartLineRow({ line, compact = false }: { line: CartLine; compact
             {line.brand && <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{line.brand}</p>}
             <Link href={`/p/${line.slug}`} onClick={closeCart} className="line-clamp-2 text-sm font-medium hover:underline">{line.name}</Link>
             <p className="mt-0.5 text-xs text-muted">{line.variantLabel}</p>
+            {line.promotion && <p className="mt-0.5 text-xs font-semibold text-rose-deep">{line.promotion.name} price</p>}
           </div>
           <p className="shrink-0 text-sm font-semibold">{formatMoney(line.lineTotal)}</p>
         </div>

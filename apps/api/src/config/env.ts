@@ -63,6 +63,37 @@ export class Env {
   /** Minutes an unpaid online order holds its stock before it is cancelled. */
   @Transform(({ value }) => Number(value)) @IsInt() @Min(5)
   PAYMENT_TTL_MINUTES = 30;
+
+  // ─── Search (Meilisearch is used when configured and reachable; otherwise the built-in engine) ───
+  @Transform(blankToUndef) @IsOptional() @IsString()
+  MEILI_HOST?: string;
+
+  @Transform(blankToUndef) @IsOptional() @IsString()
+  MEILI_MASTER_KEY?: string;
+
+  // ─── Email and SMS ───
+  /** "log" writes messages to the API log (development); "smtp" sends through SMTP_URL. */
+  @IsIn(['log', 'smtp'])
+  MAIL_DRIVER: 'log' | 'smtp' = 'log';
+
+  @Transform(blankToUndef) @IsOptional() @IsString() @Matches(/^smtps?:\/\//, { message: 'SMTP_URL must look like smtp://user:pass@host:587' })
+  SMTP_URL?: string;
+
+  @IsString()
+  MAIL_FROM = 'VÉLORA <no-reply@velora.test>';
+
+  /** "log" writes messages to the API log (development); "hubtel" sends through Hubtel SMS. */
+  @IsIn(['log', 'hubtel'])
+  SMS_DRIVER: 'log' | 'hubtel' = 'log';
+
+  @Transform(blankToUndef) @IsOptional() @IsString()
+  HUBTEL_SMS_CLIENT_ID?: string;
+
+  @Transform(blankToUndef) @IsOptional() @IsString()
+  HUBTEL_SMS_CLIENT_SECRET?: string;
+
+  @IsString() @Matches(/^[A-Za-z0-9 ]{1,11}$/, { message: 'SMS_SENDER_ID must be 1–11 letters or digits' })
+  SMS_SENDER_ID = 'VELORA';
 }
 
 export function validateEnv(raw: Record<string, unknown>): Env {
@@ -74,6 +105,10 @@ export function validateEnv(raw: Record<string, unknown>): Env {
   }
   if (env.NODE_ENV === 'production' && env.JWT_ACCESS_SECRET.startsWith('replace-with')) {
     throw new Error('JWT_ACCESS_SECRET still has the placeholder value.');
+  }
+  if (env.MAIL_DRIVER === 'smtp' && !env.SMTP_URL) throw new Error('MAIL_DRIVER=smtp needs SMTP_URL.');
+  if (env.SMS_DRIVER === 'hubtel' && !(env.HUBTEL_SMS_CLIENT_ID && env.HUBTEL_SMS_CLIENT_SECRET)) {
+    throw new Error('SMS_DRIVER=hubtel needs HUBTEL_SMS_CLIENT_ID and HUBTEL_SMS_CLIENT_SECRET.');
   }
   if (env.NODE_ENV === 'production' && env.PAYMENT_SIMULATOR) {
     throw new Error('PAYMENT_SIMULATOR must never be enabled in production.');

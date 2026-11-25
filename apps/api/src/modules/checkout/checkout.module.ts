@@ -5,7 +5,7 @@ import {
 import { ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import {
-  CartStatus, CommissionStatus, OrderStatus, PaymentMethod, PaymentProvider, PaymentStatus, PaymentTxnStatus, Prisma,
+  CartStatus, CommissionStatus, LoyaltyTxnType, OrderStatus, PaymentMethod, PaymentProvider, PaymentStatus, PaymentTxnStatus, Prisma,
 } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import { IsIn } from 'class-validator';
@@ -17,6 +17,8 @@ import { requireViewer, Viewer, type ViewerRef } from '../../common/viewer';
 import { CartModule, CartService } from '../cart/cart.module';
 import { fmt, PricingService } from '../cart/pricing.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { LoyaltyService } from '../loyalty/loyalty.module';
+import { MessagingService } from '../notifications/messaging.service';
 import { orderInclude, presentOrder } from '../orders/order-presenter';
 import { PaymentsService, type NextAction, type OnlineProvider } from '../payments/payments.service';
 import { AddressInput, LookupDto, PlaceOrderDto, QuoteDto } from './checkout.dto';
@@ -45,12 +47,14 @@ export class CheckoutService {
     private readonly cart: CartService,
     private readonly inventory: InventoryService,
     private readonly payments: PaymentsService,
+    private readonly loyalty: LoyaltyService,
+    private readonly messaging: MessagingService,
   ) {}
 
   private async pricedCart(v: ViewerRef, email: string | null) {
     const cart = await this.cart.find(v);
     if (!cart || !cart.items.length) throw new BadRequestException({ message: 'Your bag is empty', code: 'CART_EMPTY' });
-    const lines = cart.items.map((i) => this.pricing.priceLine(i));
+    const lines = await this.pricing.priceItems(cart.items);
     const subtotal = this.pricing.subtotal(lines);
     const coupon = cart.coupon ? await this.pricing.evaluateCoupon(cart.coupon, { subtotal, userId: v.userId, email }) : null;
     return { cart, lines, subtotal, coupon };
@@ -71,8 +75,10 @@ export class CheckoutService {
     if (!options.length) throw new BadRequestException('We do not deliver to that region yet');
     const method = dto.shippingMethodId ? options.find((o) => o.id === dto.shippingMethodId) : options[0];
     if (!method) throw new BadRequestException({ message: 'That delivery option is not available for your region', code: 'SHIPPING_UNAVAILABLE' });
-    const totals = await this.pricing.totals(subtotal, discount, method.fee);
+    const points = await this.loyalty.redemption(v.userId, subtotal.sub(discount), dto.redeemPoints);
+    const totals = await this.pricing.totals(subtotal, discount.add(points?.value ?? 0), method.fee);
     return {
+      loyalty: points && { balance: points.balance, maxPoints: points.maxPoints, points: points.points, value: fmt(points.value) },
       shippingMethodId: method.id,
       subtotal: fmt(totals.subtotal), discountTotal: fmt(totals.discountTotal), shippingTotal: fmt(totals.shippingTotal),
       taxTotal: fmt(totals.taxTotal), taxIncluded: fmt(totals.taxIncluded), grandTotal: fmt(totals.grandTotal),
@@ -121,7 +127,9 @@ export class CheckoutService {
     const options = await this.pricing.shippingOptions(address.region, subtotal.sub(discount), !!coupon?.freeShipping);
     const method = options.find((o) => o.id === dto.shippingMethodId);
     if (!method) throw new BadRequestException({ message: 'That delivery option is not available for your region', code: 'SHIPPING_UNAVAILABLE' });
-    const totals = await this.pricing.totals(subtotal, discount, method.fee);
+    const points = await this.loyalty.redemption(v.userId, subtotal.sub(discount), dto.redeemPoints);
+    const pointsValue = points?.value ?? new Prisma.Decimal(0);
+    const totals = await this.pricing.totals(subtotal, discount.add(pointsValue), method.fee);
     if (dto.expectedTotal && !totals.grandTotal.eq(dto.expectedTotal)) {
       throw new ConflictException({
         message: `Your total has changed to GH₵${totals.grandTotal.toFixed(2)}. Please review before placing your order.`,
@@ -147,6 +155,7 @@ export class CheckoutService {
             subtotal: totals.subtotal, discountTotal: totals.discountTotal, shippingTotal: totals.shippingTotal,
             taxTotal: totals.taxTotal, grandTotal: totals.grandTotal,
             couponId: coupon?.coupon.id, couponCode: coupon?.coupon.code,
+            loyaltyPointsUsed: points?.points ?? 0, loyaltyDiscount: pointsValue,
             shippingMethodId: method.id,
             shippingAddress: { ...address } as Prisma.InputJsonObject,
             customerNote: dto.note,
@@ -154,6 +163,19 @@ export class CheckoutService {
             channel: 'web',
           },
         });
+
+        if (points?.points) await this.loyalty.debit(tx, v.userId!, points.points, LoyaltyTxnType.REDEEM, `Used on order ${order.orderNumber}`, order.id);
+
+        // Flash-sale allocations are claimed atomically, so a limited sale can never oversell.
+        for (const l of lines) {
+          if (!l.promotion) continue;
+          const claimed = await tx.$executeRaw`
+            UPDATE promotion_products SET sold_count = sold_count + ${l.quantity}
+            WHERE promotion_id = ${l.promotion.id} AND product_id = ${l.productId} AND (stock_limit IS NULL OR sold_count + ${l.quantity} <= stock_limit)`;
+          if (claimed !== 1) {
+            throw new ConflictException({ message: `The ${l.promotion.name} price for ${l.name} has just sold out. Please review your bag.`, code: 'PRICE_CHANGED' });
+          }
+        }
 
         const allocations = await this.inventory.reserve(tx, lines.map((l) => ({ variantId: l.variantId, quantity: l.quantity, sku: l.sku })), { orderId: order.id, userId: v.userId });
 
@@ -170,17 +192,19 @@ export class CheckoutService {
             const share = pi === parts.length - 1 ? partLeft : lineDiscount.mul(part.quantity).div(line.quantity).toDecimalPlaces(2);
             partLeft = partLeft.sub(share);
             const gross = line.unitPrice.mul(part.quantity);
+            // Points are funded by VÉLORA, so only the coupon share reduces what the vendor earns on.
+            const couponShare = totals.discountTotal.isZero() ? new Prisma.Decimal(0) : share.mul(discount).div(totals.discountTotal).toDecimalPlaces(2);
             const item = await tx.orderItem.create({
               data: {
                 orderId: order.id, productId: line.productId, variantId: line.variantId, vendorId: line.vendorId,
                 warehouseId: part.warehouseId, productName: line.name, variantLabel: line.variantLabel || null,
                 sku: line.sku, imageUrl: line.image, unitPrice: line.unitPrice, quantity: part.quantity,
-                discountAmount: share, lineTotal: gross.sub(share),
+                discountAmount: share, lineTotal: gross.sub(share), promotionId: line.promotion?.id,
               },
             });
             if (line.vendorId) {
               const rate = vendorRates.get(line.vendorId) ?? new Prisma.Decimal(15);
-              const net = gross.sub(share);
+              const net = gross.sub(couponShare);
               const commission = net.mul(rate).div(100).toDecimalPlaces(2);
               await tx.vendorCommission.create({
                 data: { vendorId: line.vendorId, orderItemId: item.id, rate, grossAmount: net, commissionAmount: commission,
@@ -214,6 +238,8 @@ export class CheckoutService {
           await tx.orderStatusHistory.create({
             data: { orderId: order.id, toStatus: OrderStatus.PROCESSING, note: 'Order placed. Pay cash or MoMo to the rider on delivery.', changedBy: v.userId },
           });
+          // Online orders are confirmed when the payment is (PaymentsService.apply).
+          await this.messaging.orderEvent(tx, order.id, 'placed');
         }
         await tx.cart.update({ where: { id: cart.id }, data: { status: CartStatus.CONVERTED, couponId: null } });
         if (v.userId) {

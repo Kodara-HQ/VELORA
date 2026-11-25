@@ -1,7 +1,10 @@
 import { Controller, Get, HttpCode, Module, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { Public } from '../../common/decorators';
+import { ApiBearerAuth } from '@nestjs/swagger';
+import { PERMISSIONS } from '@velora/shared';
+import { Public, RequirePermissions } from '../../common/decorators';
+import { SearchService } from './search.service';
 import { Viewer, type ViewerRef } from '../../common/viewer';
 import { CatalogService } from './catalog.service';
 import { ProductService } from './product.service';
@@ -91,9 +94,19 @@ export class CatalogController {
   }
 }
 
+@ApiTags('Admin · Search')
+@ApiBearerAuth()
+@Controller('admin/search')
+export class AdminSearchController {
+  constructor(private readonly search: SearchService) {}
+
+  @Post('reindex') @HttpCode(200) @RequirePermissions(PERMISSIONS.SETTINGS_MANAGE)
+  reindex() { return this.search.reindex(); }
+}
+
 @Module({
-  controllers: [CatalogController],
-  providers: [CatalogService, ProductService],
-  exports: [CatalogService],
+  controllers: [CatalogController, AdminSearchController],
+  providers: [CatalogService, ProductService, SearchService],
+  exports: [CatalogService, SearchService],
 })
 export class CatalogModule {}

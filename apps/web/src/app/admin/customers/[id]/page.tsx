@@ -3,10 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useState } from 'react';
+import { Dialog } from '@/components/dialog';
 import { AddressText } from '@/components/address-form';
 import { humanize, KpiTile, PageHeader, Panel, QueryState, StatusPill, Table, Td } from '@/components/admin/ui';
-import { Alert, Badge, Button } from '@/components/ui';
-import { api } from '@/lib/api';
+import { Alert, Badge, Button, Field } from '@/components/ui';
+import { api, ApiError } from '@/lib/api';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { useCan } from '@/lib/session';
 import { errorMessage } from '@/lib/shop';
@@ -50,6 +52,7 @@ export default function CustomerPage() {
               <KpiTile label="Rewards" value={`${(c.loyalty?.pointsBalance ?? 0).toLocaleString()} pts`} hint={c.loyalty?.tier.toLowerCase()} />
               <KpiTile label="Last order" value={c.stats.lastOrderAt ? new Date(c.stats.lastOrderAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'} hint={`${c.stats.wishlistItems} saved in wishlist`} />
             </div>
+            {c.loyalty && <LoyaltyPanel customerId={Number(id)} loyalty={c.loyalty} />}
             <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
               <Panel title="Orders" padded={false}>
                 <QueryState q={{ isPending: false, isError: false, error: null }} empty={!c.orders.length} emptyText="No orders yet.">
@@ -88,5 +91,48 @@ export default function CustomerPage() {
         )}
       </QueryState>
     </>
+  );
+}
+
+function LoyaltyPanel({ customerId, loyalty }: { customerId: number; loyalty: NonNullable<Customer['loyalty']> }) {
+  const qc = useQueryClient();
+  const canAdjust = useCan('loyalty.manage');
+  const [open, setOpen] = useState(false);
+  const [points, setPoints] = useState('');
+  const [reason, setReason] = useState('');
+  const m = useMutation({
+    mutationFn: () => api(`/admin/customers/${customerId}/loyalty/adjust`, { method: 'POST', body: { points: Number(points), reason } }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-customer', String(customerId)] }); setOpen(false); setPoints(''); setReason(''); },
+  });
+  const errs = m.error instanceof ApiError ? m.error.fieldErrors : {};
+  const n = Number(points);
+  return (
+    <Panel title={`Rewards · ${humanize(loyalty.tier)} · ${loyalty.lifetimePoints.toLocaleString()} lifetime points`} padded={false}
+      actions={canAdjust && <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>Adjust points</Button>}>
+      {!loyalty.transactions.length ? <p className="px-5 py-6 text-sm text-muted">No points activity yet.</p> : (
+        <ul className="divide-y divide-line text-sm">
+          {loyalty.transactions.map((t) => (
+            <li key={t.id} className="flex justify-between gap-3 px-5 py-2.5">
+              <span><span className="font-medium">{humanize(t.type)}</span> <span className="text-muted">· {t.description}</span></span>
+              <span className="shrink-0"><b className={t.points > 0 ? 'text-success' : 'text-rose-deep'}>{t.points > 0 ? '+' : ''}{t.points}</b> <span className="text-xs text-muted">{new Date(t.createdAt).toLocaleDateString('en-GB')}</span></span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Dialog open={open} onClose={() => setOpen(false)} label="Adjust points" className="max-w-md">
+        <form className="space-y-4 p-6" onSubmit={(e) => { e.preventDefault(); m.mutate(); }}>
+          <h2 className="text-xl font-extrabold">Adjust points</h2>
+          <p className="text-sm text-muted">Balance {loyalty.pointsBalance.toLocaleString()}. Adjustments are recorded in the audit log and shown to the customer; they don’t change tier.</p>
+          {m.isError && !Object.keys(errs).length && <Alert tone="danger">{errorMessage(m.error)}</Alert>}
+          <Field label="Points (+ add, − remove)" inputMode="numeric" value={points} onChange={(e) => setPoints(e.target.value.replace(/[^d-]/g, ''))} error={errs.points}
+            hint={Number.isInteger(n) && n !== 0 ? `New balance: ${(loyalty.pointsBalance + n).toLocaleString()}` : undefined} />
+          <Field label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Apology for late delivery" error={errs.reason} />
+          <div className="flex gap-2">
+            <Button type="submit" loading={m.isPending} disabled={!Number.isInteger(n) || n === 0 || reason.trim().length < 5}>Save</Button>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          </div>
+        </form>
+      </Dialog>
+    </Panel>
   );
 }

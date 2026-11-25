@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Coupon, DiscountType, OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { visibleWhere } from '../catalog/product-card';
+import { activePromotions, promoUnitPrice, type ActivePromo } from '../promotions/promo-pricing';
 
 const D = (v: Prisma.Decimal.Value) => new Prisma.Decimal(v);
 const ZERO = D(0);
@@ -46,6 +47,8 @@ export interface PricedLine {
   quantity: number;
   available: number;
   lineTotal: Prisma.Decimal;
+  /** The live promotion that set unitPrice, if any. */
+  promotion: { id: number; name: string; slug: string; endsAt: Date; stockLeft: number | null } | null;
   /** Why this line can't be checked out as-is; empty when fine. */
   issue: 'UNAVAILABLE' | 'OUT_OF_STOCK' | 'INSUFFICIENT_STOCK' | null;
 }
@@ -72,7 +75,13 @@ export interface Totals {
 export class PricingService {
   constructor(private readonly prisma: PrismaService) {}
 
-  priceLine(item: CartItemRow): PricedLine {
+  /** Prices a set of cart items with the promotions live right now. */
+  async priceItems(items: CartItemRow[]): Promise<PricedLine[]> {
+    const promos = await activePromotions(this.prisma, items.map((i) => i.variant.product.id));
+    return items.map((i) => this.priceLine(i, promos));
+  }
+
+  priceLine(item: CartItemRow, promos: Map<number, ActivePromo> = new Map()): PricedLine {
     const v = item.variant;
     const p = v.product;
     const visible =
@@ -81,8 +90,12 @@ export class PricingService {
     const available = v.inventory
       .filter((i) => i.warehouse.isActive)
       .reduce((s, i) => s + Math.max(0, i.quantityOnHand - i.quantityReserved), 0);
-    const unitPrice = v.price ?? p.basePrice;
-    const compare = v.compareAtPrice ?? p.compareAtPrice;
+    const listPrice = v.price ?? p.basePrice;
+    const promo = promos.get(p.id);
+    const promoPrice = promoUnitPrice(listPrice, promo);
+    const unitPrice = promoPrice ?? listPrice;
+    const compare = promoPrice ? listPrice : v.compareAtPrice ?? p.compareAtPrice;
+    const stockLeft = promo?.stockLimit != null ? Math.max(0, promo.stockLimit - promo.soldCount) : null;
     const image = p.images.find((i) => i.color && i.color === v.color)?.url ?? p.images[0]?.url ?? null;
     return {
       itemId: item.id, variantId: v.id, productId: p.id, vendorId: p.vendorId,
@@ -92,6 +105,7 @@ export class PricingService {
       unitPrice, compareAtPrice: compare && compare.gt(unitPrice) ? compare : null,
       quantity: item.quantity, available,
       lineTotal: money(unitPrice.mul(item.quantity)),
+      promotion: promo && promoPrice ? { id: promo.promotionId, name: promo.name, slug: promo.slug, endsAt: promo.endsAt, stockLeft } : null,
       issue: !visible ? 'UNAVAILABLE' : available === 0 ? 'OUT_OF_STOCK' : available < item.quantity ? 'INSUFFICIENT_STOCK' : null,
     };
   }

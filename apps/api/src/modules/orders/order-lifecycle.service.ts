@@ -3,6 +3,8 @@ import {
   CommissionStatus, LoyaltyTxnType, OrderStatus, PaymentStatus, PaymentTxnStatus, Prisma, RefundStatus, ReturnStatus,
 } from '@prisma/client';
 import { InventoryService } from '../inventory/inventory.service';
+import { LoyaltyService } from '../loyalty/loyalty.module';
+import { MessagingService } from '../notifications/messaging.service';
 
 export const CANCELLABLE: OrderStatus[] = [OrderStatus.PENDING_PAYMENT, OrderStatus.PAID, OrderStatus.PROCESSING];
 
@@ -13,7 +15,11 @@ export const CANCELLABLE: OrderStatus[] = [OrderStatus.PENDING_PAYMENT, OrderSta
  */
 @Injectable()
 export class OrderLifecycleService {
-  constructor(private readonly inventory: InventoryService) {}
+  constructor(
+    private readonly inventory: InventoryService,
+    private readonly loyalty: LoyaltyService,
+    private readonly messaging: MessagingService,
+  ) {}
 
   async cancel(tx: Prisma.TransactionClient, orderId: number, o: { by: number | null; reason: string; historyNote: string }) {
     const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
@@ -39,6 +45,14 @@ export class OrderLifecycleService {
         await tx.refund.create({ data: { orderId, paymentId: payment?.id, amount: order.grandTotal.sub(order.refundedTotal), reason: `Order cancelled: ${o.reason}`, status: RefundStatus.REQUESTED } });
       }
     }
+    // Flash-sale units go back to the sale; redeemed points go back to the customer.
+    await tx.$executeRaw`
+      UPDATE promotion_products pp JOIN (
+        SELECT promotion_id, product_id, SUM(quantity) AS qty FROM order_items WHERE order_id = ${orderId} AND promotion_id IS NOT NULL GROUP BY promotion_id, product_id
+      ) x ON x.promotion_id = pp.promotion_id AND x.product_id = pp.product_id
+      SET pp.sold_count = GREATEST(pp.sold_count - x.qty, 0)`;
+    await this.loyalty.restoreRedeemed(tx, order, 1, 'order cancelled');
+    await this.messaging.orderEvent(tx, orderId, 'cancelled', { note: o.reason.endsWith('.') ? o.reason : o.reason + '.' });
     if (order.userId && order.status !== OrderStatus.PENDING_PAYMENT) {
       await tx.customer.updateMany({ where: { userId: order.userId, orderCount: { gt: 0 } }, data: { orderCount: { decrement: 1 } } });
     }
@@ -76,6 +90,13 @@ export class OrderLifecycleService {
         where: { orderItemId: { in: refund.return.items.map((i) => i.orderItemId) }, status: { in: [CommissionStatus.PENDING, CommissionStatus.ELIGIBLE] } },
         data: { status: CommissionStatus.REVERSED },
       });
+    }
+
+    await this.messaging.orderEvent(tx, order.id, 'refunded', { note: `GH₵${refund.amount.toFixed(2)}` });
+
+    // Points paid towards refunded items come back in proportion (cancellation already returned them all).
+    if (order.status !== OrderStatus.CANCELLED && !order.grandTotal.isZero()) {
+      await this.loyalty.restoreRedeemed(tx, order, Number(refund.amount) / Number(order.grandTotal), 'refund');
     }
 
     // Lifetime value and loyalty only ever counted delivered merchandise, so only claw back what was granted.

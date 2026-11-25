@@ -14,7 +14,8 @@ import { Paginated, PaginationQuery } from '../../common/dto/pagination.dto';
 import { GH_PHONE_RULE } from '../auth/dto/auth.dto';
 import { AddressInput } from '../checkout/checkout.dto';
 import { OrderLifecycleService } from '../orders/order-lifecycle.service';
-import { cardSelect, toCard, visibleWhere } from '../catalog/product-card';
+import { cardSelect, visibleWhere } from '../catalog/product-card';
+import { toCards } from '../promotions/promo-pricing';
 import { orderInclude, orderSummary, presentOrder } from '../orders/order-presenter';
 
 class UpdateProfileDto {
@@ -182,7 +183,8 @@ export class CustomerService {
       orderBy: { addedAt: 'desc' },
       select: { addedAt: true, product: { select: cardSelect } },
     });
-    return items.map((i) => ({ addedAt: i.addedAt, product: toCard(i.product) }));
+    const cards = await toCards(this.prisma, items.map((i) => i.product));
+    return items.map((i, n) => ({ addedAt: i.addedAt, product: cards[n] }));
   }
 
   async wishlistIds(userId: number) {

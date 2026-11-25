@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { serverApi } from '@/lib/server-api';
-import type { Facets, ProductCard } from '@/lib/types';
+import type { Facets, ProductCard, SearchMeta } from '@/lib/types';
 import { ActiveFilters, Filters, SortSelect } from './listing-filters';
 import { ProductGrid } from './product-card';
 import { ButtonLink, Container, EmptyState } from './ui';
@@ -21,15 +21,16 @@ export function toQuery(sp: Search, extra: Record<string, string | undefined> = 
 }
 
 /** Server-rendered listing shared by department, shop-all and search pages. */
-export async function ProductListing({ title, eyebrow, intro, category, q, vendor, searchParams, basePath, crumbs, subnav }: {
-  title: string; eyebrow?: string; intro?: string; category?: string; q?: string; vendor?: string; searchParams: Search; basePath: string;
+export async function ProductListing({ title, eyebrow, intro, category, q, vendor, promotion, searchParams, basePath, crumbs, subnav, banner }: {
+  title: string; eyebrow?: string; intro?: string; category?: string; q?: string; vendor?: string; promotion?: string; banner?: React.ReactNode; searchParams: Search; basePath: string;
   crumbs?: Array<{ name: string; href: string }>; subnav?: Array<{ name: string; href: string; active?: boolean }>;
 }) {
-  const query = toQuery(searchParams, { category, q, vendor });
+  const query = toQuery(searchParams, { category, q, vendor, promotion });
   const facetQuery = new URLSearchParams();
   if (category) facetQuery.set('category', category);
   if (q) facetQuery.set('q', q);
   if (vendor) facetQuery.set('vendor', vendor);
+  if (promotion) facetQuery.set('promotion', promotion);
   const [{ data: products, meta }, { data: facets }] = await Promise.all([
     serverApi<ProductCard[]>(`/products?${query}`, { notFoundOn404: true }),
     serverApi<Facets>(`/products/facets?${facetQuery}`, { notFoundOn404: true }),
@@ -57,6 +58,15 @@ export async function ProductListing({ title, eyebrow, intro, category, q, vendo
         <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">{title}</h1>
         {intro && <p className="mt-2 text-muted">{intro}</p>}
       </header>
+      {banner}
+      {(() => {
+        const search = (meta as { search?: SearchMeta } | undefined)?.search;
+        return search?.correctedFrom ? (
+          <p className="mb-5 rounded-sm bg-sand px-4 py-3 text-sm">
+            No results for <b>“{search.correctedFrom}”</b>. Showing results for <b>“{search.query}”</b> instead.
+          </p>
+        ) : null;
+      })()}
       {subnav && subnav.length > 0 && (
         <nav aria-label="Sub-categories" className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
           {subnav.map((s) => (

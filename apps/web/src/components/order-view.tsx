@@ -98,7 +98,8 @@ export function OrderView({ order, actions, guestEmail }: { order: Order; action
           <h2 className="font-display text-lg font-bold">Summary</h2>
           <div className="mt-4 space-y-2">
             <Row label="Subtotal" value={formatMoney(order.subtotal)} />
-            {Number(order.discountTotal) > 0 && <Row label={`Discount${order.couponCode ? ` (${order.couponCode})` : ''}`} value={`−${formatMoney(order.discountTotal)}`} accent />}
+            {Number(order.discountTotal) - Number(order.loyaltyDiscount ?? 0) > 0.004 && <Row label={`Discount${order.couponCode ? ` (${order.couponCode})` : ''}`} value={`−${formatMoney((Number(order.discountTotal) - Number(order.loyaltyDiscount ?? 0)).toFixed(2))}`} accent />}
+            {order.loyaltyPointsUsed > 0 && <Row label={`Points (${order.loyaltyPointsUsed.toLocaleString()})`} value={`−${formatMoney(order.loyaltyDiscount)}`} accent />}
             <Row label="Delivery" value={Number(order.shippingTotal) === 0 ? 'Free' : formatMoney(order.shippingTotal)} />
             {Number(order.taxTotal) > 0 && <Row label="Tax" value={formatMoney(order.taxTotal)} />}
             <div className="border-t border-line pt-3"><Row label="Total" value={formatMoney(order.grandTotal)} strong /></div>

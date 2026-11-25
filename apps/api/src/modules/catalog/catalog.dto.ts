@@ -43,6 +43,9 @@ export class ProductQuery extends PaginationQuery {
   @ApiPropertyOptional() @IsOptional() @Transform(toBool) @IsBoolean()
   onSale?: boolean;
 
+  @ApiPropertyOptional({ description: 'Only products in this live promotion (slug)' }) @IsOptional() @IsString() @MaxLength(160)
+  promotion?: string;
+
   @ApiPropertyOptional({ minimum: 1, maximum: 5 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(5)
   minRating?: number;
 
@@ -56,6 +59,9 @@ export class ProductQuery extends PaginationQuery {
 export class FacetQuery {
   @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^[a-z0-9-]+$/) @MaxLength(160)
   vendor?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^[a-z0-9-]+$/) @MaxLength(160)
+  promotion?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^[a-z0-9-]+$/) @MaxLength(140)
   category?: string;

@@ -16,6 +16,7 @@ const ADMIN_NAV: Array<{ section: string; items: Array<{ href: string; label: st
   { section: 'Overview', items: [
     { href: '/admin', label: 'Dashboard', perm: P.DASHBOARD_VIEW },
     { href: '/admin/reports', label: 'Reports', perm: P.ANALYTICS_VIEW },
+    { href: '/admin/analytics', label: 'Analytics', perm: P.ANALYTICS_VIEW },
   ] },
   { section: 'Sales', items: [
     { href: '/admin/orders', label: 'Orders', perm: P.ORDERS_VIEW },
@@ -31,9 +32,15 @@ const ADMIN_NAV: Array<{ section: string; items: Array<{ href: string; label: st
     { href: '/admin/vendor-applications', label: 'Applications', perm: P.VENDORS_VIEW },
     { href: '/admin/settlements', label: 'Settlements', perm: P.SETTLEMENTS_MANAGE },
   ] },
+  { section: 'Marketing', items: [
+    { href: '/admin/promotions', label: 'Promotions', perm: P.PROMOTIONS_MANAGE },
+    { href: '/admin/coupons', label: 'Coupons', perm: P.COUPONS_MANAGE },
+    { href: '/admin/messages', label: 'Messages', perm: P.NOTIFICATIONS_SEND },
+  ] },
   { section: 'Catalogue', items: [
     { href: '/admin/products', label: 'Products', perm: P.PRODUCTS_VIEW },
     { href: '/admin/categories', label: 'Categories & brands', perm: P.PRODUCTS_VIEW },
+    { href: '/admin/reviews', label: 'Reviews', perm: P.REVIEWS_MODERATE },
   ] },
   { section: 'Inventory', items: [
     { href: '/admin/inventory', label: 'Stock levels', perm: P.INVENTORY_VIEW },

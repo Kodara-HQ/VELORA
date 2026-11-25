@@ -4,7 +4,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { Paginated } from '../../common/dto/pagination.dto';
 import type { ViewerRef } from '../../common/viewer';
 import { CatalogService, ORDER_BY } from './catalog.service';
-import { cardSelect, toCard, visibleWhere, type CardRow } from './product-card';
+import { cardSelect, visibleWhere, type CardRow } from './product-card';
+import { activePromotionWhere, activePromotions, promoBadge, promoUnitPrice, toCards } from '../promotions/promo-pricing';
 import type { ReviewQuery } from './catalog.dto';
 
 @Injectable()
@@ -57,11 +58,15 @@ export class ProductService {
       }),
     ]);
 
-    const priceOf = (v: { price: Prisma.Decimal | null }) => v.price ?? p.basePrice;
+    const promo = (await activePromotions(this.prisma, [p.id])).get(p.id);
+    const listPrice = (v: { price: Prisma.Decimal | null }) => v.price ?? p.basePrice;
+    // A live promotion sets the selling price; the list price (or a higher compare-at) becomes the strike-through.
+    const priceOf = (v: { price: Prisma.Decimal | null }) => promoUnitPrice(listPrice(v), promo) ?? listPrice(v);
     const compareOf = (v: { price: Prisma.Decimal | null; compareAtPrice: Prisma.Decimal | null }) => {
-      const c = v.compareAtPrice ?? p.compareAtPrice;
+      const c = promo && promoUnitPrice(listPrice(v), promo) ? listPrice(v) : v.compareAtPrice ?? p.compareAtPrice;
       return c && c.gt(priceOf(v)) ? c.toFixed(2) : null;
     };
+    const basePromo = promoUnitPrice(p.basePrice, promo);
 
     return {
       id: p.id, slug: p.slug, name: p.name, styleCode: p.styleCode,
@@ -69,8 +74,9 @@ export class ProductService {
       vendor: p.vendor ? { name: p.vendor.businessName, slug: p.vendor.slug } : null,
       shortDescription: p.shortDescription, description: p.description, material: p.material,
       careInstructions: p.careInstructions, videoUrl: p.videoUrl,
-      price: p.basePrice.toFixed(2),
+      price: priceOf({ price: null }).toFixed(2),
       compareAtPrice: compareOf({ price: null, compareAtPrice: null }),
+      promotion: promo && basePromo ? promoBadge(promo, p.basePrice, basePromo) : null,
       currency: p.currency,
       rating: Number(p.avgRating), reviewCount: p.reviewCount,
       breadcrumbs: [
@@ -139,10 +145,9 @@ export class ProductService {
       take: 30,
     });
     const price = Number(p.basePrice);
-    const similar = candidates
+    const similar = await toCards(this.prisma, candidates
       .sort((a, b) => Math.abs(Number(a.basePrice) - price) - Math.abs(Number(b.basePrice) - price))
-      .slice(0, 8)
-      .map(toCard);
+      .slice(0, 8));
 
     const together = await this.prisma.$queryRaw<Array<{ product_id: number }>>`
       SELECT oi2.product_id FROM order_items oi1
@@ -164,7 +169,7 @@ export class ProductService {
       });
       look = [...look, ...extra];
     }
-    return { similar, completeTheLook: look.map(toCard) };
+    return { similar, completeTheLook: await toCards(this.prisma, look) };
   }
 
   async home() {
@@ -173,7 +178,7 @@ export class ProductService {
     const [newArrivals, bestSellers, onSale, featured, brands, reviews, tree] = await Promise.all([
       this.prisma.product.findMany({ where: v, select: cardSelect, orderBy: ORDER_BY.newest, take }),
       this.prisma.product.findMany({ where: v, select: cardSelect, orderBy: ORDER_BY.popular, take }),
-      this.prisma.product.findMany({ where: { AND: [v, { compareAtPrice: { not: null } }] }, select: cardSelect, orderBy: ORDER_BY.popular, take }),
+      this.prisma.product.findMany({ where: { AND: [v, { OR: [{ compareAtPrice: { not: null } }, { promotionProducts: { some: { promotion: activePromotionWhere() } } }] }] }, select: cardSelect, orderBy: ORDER_BY.popular, take }),
       this.prisma.product.findMany({ where: { AND: [v, { isFeatured: true }] }, select: cardSelect, orderBy: { soldCount: 'desc' }, take }),
       this.catalog.brands(true),
       this.prisma.productReview.findMany({
@@ -190,10 +195,10 @@ export class ProductService {
     ]);
     return {
       categories: tree.tree.map((c) => ({ name: c.name, slug: c.slug, imageUrl: c.imageUrl })),
-      newArrivals: newArrivals.map(toCard),
-      bestSellers: bestSellers.map(toCard),
-      onSale: onSale.map(toCard),
-      featured: featured.map(toCard),
+      newArrivals: await toCards(this.prisma, newArrivals),
+      bestSellers: await toCards(this.prisma, bestSellers),
+      onSale: await toCards(this.prisma, onSale),
+      featured: await toCards(this.prisma, featured),
       brands,
       reviews: reviews.map(({ user, product, ...r }) => ({
         ...r,
@@ -242,32 +247,50 @@ export class ProductService {
     if (!ids.length) return [];
     const rows = await this.prisma.product.findMany({ where: { AND: [visibleWhere(), { id: { in: ids } }] }, select: cardSelect });
     const byId = new Map(rows.map((r) => [r.id, r]));
-    return ids.map((id) => byId.get(id)).filter((r): r is CardRow => !!r).map(toCard);
+    return toCards(this.prisma, ids.map((id) => byId.get(id)).filter((r): r is CardRow => !!r));
   }
 
-  /** Best-rated products from the departments this shopper has been browsing, excluding what they've seen. */
+  /**
+   * "Picked for you": departments the shopper browses, buys from and wishlists, weighted by how strong
+   * the signal is (purchase > wishlist > view), excluding what they already bought or just looked at.
+   */
   async recommendations(viewer: ViewerRef) {
     const seen = await this.recentIds(viewer, 30);
+    const [bought, wished] = viewer.userId ? await Promise.all([
+      this.prisma.orderItem.findMany({ where: { order: { userId: viewer.userId, status: { notIn: ['CANCELLED', 'PENDING_PAYMENT'] } }, productId: { not: null } }, orderBy: { id: 'desc' }, take: 30, select: { productId: true } }),
+      this.prisma.wishlistItem.findMany({ where: { wishlist: { userId: viewer.userId } }, take: 30, select: { productId: true } }),
+    ]) : [[], []];
+    const boughtIds = bought.map((b) => b.productId!);
+    const weights = new Map<number, number>();
+    const add = (ids: number[], w: number) => ids.forEach((id) => weights.set(id, (weights.get(id) ?? 0) + w));
+    add(seen, 1); add(wished.map((x) => x.productId), 2); add(boughtIds, 3);
+
     let rows: CardRow[] = [];
-    if (seen.length) {
-      const viewed = await this.prisma.product.findMany({ where: { id: { in: seen } }, select: { categoryId: true } });
-      const catIds = [...new Set((await Promise.all(viewed.map((x) => this.catalog.departmentIds(x.categoryId)))).flat())];
-      rows = await this.prisma.product.findMany({
-        where: { AND: [visibleWhere(), { categoryId: { in: catIds } }, { id: { notIn: seen } }] },
-        select: cardSelect,
-        orderBy: [{ avgRating: 'desc' }, { soldCount: 'desc' }],
-        take: 8,
+    if (weights.size) {
+      const signals = await this.prisma.product.findMany({ where: { id: { in: [...weights.keys()] } }, select: { id: true, categoryId: true, basePrice: true } });
+      const deptScore = new Map<number, number>();
+      for (const p of signals) for (const c of await this.catalog.departmentIds(p.categoryId)) deptScore.set(c, (deptScore.get(c) ?? 0) + (weights.get(p.id) ?? 0));
+      const avgPrice = signals.reduce((t, p) => t + Number(p.basePrice), 0) / Math.max(1, signals.length);
+      const candidates = await this.prisma.product.findMany({
+        where: { AND: [visibleWhere(), { categoryId: { in: [...deptScore.keys()] } }, { id: { notIn: [...seen, ...boughtIds] } }] },
+        select: cardSelect, orderBy: [{ avgRating: 'desc' }, { soldCount: 'desc' }], take: 60,
       });
+      // Department affinity first, then products near the shopper's usual price point.
+      rows = candidates
+        .map((c) => ({ c, score: (deptScore.get(c.categoryId) ?? 0) * 10 - Math.abs(Number(c.basePrice) - avgPrice) / Math.max(avgPrice, 1) + Number(c.avgRating) }))
+        .sort((x, y) => y.score - x.score)
+        .slice(0, 8)
+        .map((x) => x.c);
     }
     if (rows.length < 8) {
       const fill = await this.prisma.product.findMany({
-        where: { AND: [visibleWhere(), { id: { notIn: [...seen, ...rows.map((r) => r.id)] } }] },
+        where: { AND: [visibleWhere(), { id: { notIn: [...seen, ...boughtIds, ...rows.map((r) => r.id)] } }] },
         select: cardSelect,
         orderBy: ORDER_BY.popular,
         take: 8 - rows.length,
       });
       rows = [...rows, ...fill];
     }
-    return rows.map(toCard);
+    return toCards(this.prisma, rows);
   }
 }

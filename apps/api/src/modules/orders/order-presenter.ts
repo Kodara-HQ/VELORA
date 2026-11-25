@@ -47,6 +47,7 @@ export function presentOrder(o: OrderFull) {
     subtotal: f(o.subtotal), discountTotal: f(o.discountTotal), shippingTotal: f(o.shippingTotal),
     taxTotal: f(o.taxTotal), grandTotal: f(o.grandTotal), refundedTotal: f(o.refundedTotal),
     couponCode: o.couponCode,
+    loyaltyPointsUsed: o.loyaltyPointsUsed, loyaltyDiscount: f(o.loyaltyDiscount),
     shippingAddress: o.shippingAddress,
     shippingMethod: o.shippingMethod,
     estimatedDelivery: o.shippingMethod && o.status !== OrderStatus.CANCELLED

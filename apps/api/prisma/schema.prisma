@@ -43,32 +43,32 @@ model User {
   updatedAt       DateTime   @updatedAt @map("updated_at")
   deletedAt       DateTime?  @map("deleted_at")
 
-  roles               UserRole[]
-  refreshTokens       RefreshToken[]
-  passwordResets      PasswordResetToken[]
-  loginActivities     LoginActivity[]
-  customer            Customer?
-  ownedVendors        Vendor[]             @relation("VendorOwner")
-  vendorApplications  VendorApplication[]  @relation("Applicant")
-  reviewedApplications VendorApplication[] @relation("ApplicationReviewer")
-  addresses           Address[]
-  wishlists           Wishlist[]
-  carts               Cart[]
-  orders              Order[]
-  reviews             ProductReview[]
-  questions           ProductQuestion[]    @relation("QuestionAsker")
-  answers             ProductQuestion[]    @relation("QuestionAnswerer")
-  productViews        ProductView[]
-  returns             Return[]
-  loyaltyAccount      LoyaltyAccount?
-  notifications       Notification[]
-  pushTokens          PushToken[]
-  auditLogs           AuditLog[]
-  stockMovements      StockMovement[]
-  couponRedemptions   CouponRedemption[]
-  referralsMade       Referral[]           @relation("Referrer")
-  referredBy          Referral?            @relation("Referee")
-  processedRefunds    Refund[]             @relation("RefundProcessor")
+  roles                UserRole[]
+  refreshTokens        RefreshToken[]
+  passwordResets       PasswordResetToken[]
+  loginActivities      LoginActivity[]
+  customer             Customer?
+  ownedVendors         Vendor[]             @relation("VendorOwner")
+  vendorApplications   VendorApplication[]  @relation("Applicant")
+  reviewedApplications VendorApplication[]  @relation("ApplicationReviewer")
+  addresses            Address[]
+  wishlists            Wishlist[]
+  carts                Cart[]
+  orders               Order[]
+  reviews              ProductReview[]
+  questions            ProductQuestion[]    @relation("QuestionAsker")
+  answers              ProductQuestion[]    @relation("QuestionAnswerer")
+  productViews         ProductView[]
+  returns              Return[]
+  loyaltyAccount       LoyaltyAccount?
+  notifications        Notification[]
+  pushTokens           PushToken[]
+  auditLogs            AuditLog[]
+  stockMovements       StockMovement[]
+  couponRedemptions    CouponRedemption[]
+  referralsMade        Referral[]           @relation("Referrer")
+  referredBy           Referral?            @relation("Referee")
+  processedRefunds     Refund[]             @relation("RefundProcessor")
 
   @@index([status])
   @@index([createdAt])
@@ -371,9 +371,9 @@ model Product {
   updatedAt        DateTime      @updatedAt @map("updated_at")
   deletedAt        DateTime?     @map("deleted_at")
 
-  vendor            Vendor?             @relation(fields: [vendorId], references: [id])
-  category          Category            @relation(fields: [categoryId], references: [id])
-  brand             Brand?              @relation(fields: [brandId], references: [id])
+  vendor            Vendor?            @relation(fields: [vendorId], references: [id])
+  category          Category           @relation(fields: [categoryId], references: [id])
+  brand             Brand?             @relation(fields: [brandId], references: [id])
   images            ProductImage[]
   variants          ProductVariant[]
   attributes        ProductAttribute[]
@@ -393,16 +393,16 @@ model Product {
 }
 
 model ProductImage {
-  id        Int      @id @default(autoincrement())
-  productId Int      @map("product_id")
+  id         Int      @id @default(autoincrement())
+  productId  Int      @map("product_id")
   /// Optional: image belongs to a specific colourway
-  color     String?  @db.VarChar(60)
-  url       String   @db.VarChar(512)
-  storageKey String? @map("storage_key") @db.VarChar(255)
-  altText   String?  @map("alt_text") @db.VarChar(255)
-  sortOrder Int      @default(0) @map("sort_order")
-  createdAt DateTime @default(now()) @map("created_at")
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color      String?  @db.VarChar(60)
+  url        String   @db.VarChar(512)
+  storageKey String?  @map("storage_key") @db.VarChar(255)
+  altText    String?  @map("alt_text") @db.VarChar(255)
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId, sortOrder])
   @@map("product_images")
@@ -427,14 +427,14 @@ model ProductVariant {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
-  product             Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product             Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
   inventory           Inventory[]
   cartItems           CartItem[]
   orderItems          OrderItem[]
   wishlistItems       WishlistItem[]
   purchaseOrderItems  PurchaseOrderItem[]
   stockTransferItems  StockTransferItem[]
-  exchangeReturnItems ReturnItem[]         @relation("ExchangeVariant")
+  exchangeReturnItems ReturnItem[]        @relation("ExchangeVariant")
 
   @@unique([productId, color, size])
   @@map("product_variants")
@@ -466,23 +466,23 @@ enum FitFeedback {
 }
 
 model ProductReview {
-  id               Int              @id @default(autoincrement())
-  productId        Int              @map("product_id")
-  userId           Int              @map("user_id")
-  orderItemId      Int?             @unique @map("order_item_id")
-  rating           Int              @db.TinyInt
-  title            String?          @db.VarChar(150)
-  body             String?          @db.Text
-  images           Json?
-  fit              FitFeedback?
-  isVerifiedBuyer  Boolean          @default(false) @map("is_verified_buyer")
-  status           ModerationStatus @default(PENDING)
-  helpfulCount     Int              @default(0) @map("helpful_count")
-  createdAt        DateTime         @default(now()) @map("created_at")
-  updatedAt        DateTime         @updatedAt @map("updated_at")
-  product          Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
-  user             User             @relation(fields: [userId], references: [id])
-  orderItem        OrderItem?       @relation(fields: [orderItemId], references: [id])
+  id              Int              @id @default(autoincrement())
+  productId       Int              @map("product_id")
+  userId          Int              @map("user_id")
+  orderItemId     Int?             @unique @map("order_item_id")
+  rating          Int              @db.TinyInt
+  title           String?          @db.VarChar(150)
+  body            String?          @db.Text
+  images          Json?
+  fit             FitFeedback?
+  isVerifiedBuyer Boolean          @default(false) @map("is_verified_buyer")
+  status          ModerationStatus @default(PENDING)
+  helpfulCount    Int              @default(0) @map("helpful_count")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user            User             @relation(fields: [userId], references: [id])
+  orderItem       OrderItem?       @relation(fields: [orderItemId], references: [id])
 
   @@index([productId, status, createdAt])
   @@index([userId])
@@ -649,6 +649,8 @@ model Order {
   couponId          Int?          @map("coupon_id")
   couponCode        String?       @map("coupon_code") @db.VarChar(40)
   loyaltyPointsUsed Int           @default(0) @map("loyalty_points_used")
+  /// Cash value of the points redeemed (included in discountTotal)
+  loyaltyDiscount   Decimal       @default(0) @map("loyalty_discount") @db.Decimal(12, 2)
   shippingMethodId  Int?          @map("shipping_method_id")
   /// Snapshot of the delivery address at the time of purchase
   shippingAddress   Json          @map("shipping_address")
@@ -666,16 +668,16 @@ model Order {
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")
 
-  user              User?               @relation(fields: [userId], references: [id])
-  coupon            Coupon?             @relation(fields: [couponId], references: [id], onDelete: SetNull)
-  shippingMethod    ShippingMethod?     @relation(fields: [shippingMethodId], references: [id], onDelete: SetNull)
-  items             OrderItem[]
-  payments          Payment[]
-  refunds           Refund[]
-  shipments         Shipment[]
-  returns           Return[]
-  statusHistory     OrderStatusHistory[]
-  couponRedemptions CouponRedemption[]
+  user                User?                @relation(fields: [userId], references: [id])
+  coupon              Coupon?              @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  shippingMethod      ShippingMethod?      @relation(fields: [shippingMethodId], references: [id], onDelete: SetNull)
+  items               OrderItem[]
+  payments            Payment[]
+  refunds             Refund[]
+  shipments           Shipment[]
+  returns             Return[]
+  statusHistory       OrderStatusHistory[]
+  couponRedemptions   CouponRedemption[]
   loyaltyTransactions LoyaltyTransaction[]
 
   @@index([userId, placedAt])
@@ -687,22 +689,24 @@ model Order {
 }
 
 model OrderItem {
-  id               Int             @id @default(autoincrement())
-  orderId          Int             @map("order_id")
-  productId        Int?            @map("product_id")
-  variantId        Int?            @map("variant_id")
-  vendorId         Int?            @map("vendor_id")
-  warehouseId      Int?            @map("warehouse_id")
-  productName      String          @map("product_name") @db.VarChar(200)
-  variantLabel     String?         @map("variant_label") @db.VarChar(120)
-  sku              String          @db.VarChar(80)
-  imageUrl         String?         @map("image_url") @db.VarChar(512)
-  unitPrice        Decimal         @map("unit_price") @db.Decimal(12, 2)
+  id               Int      @id @default(autoincrement())
+  orderId          Int      @map("order_id")
+  productId        Int?     @map("product_id")
+  variantId        Int?     @map("variant_id")
+  vendorId         Int?     @map("vendor_id")
+  warehouseId      Int?     @map("warehouse_id")
+  productName      String   @map("product_name") @db.VarChar(200)
+  variantLabel     String?  @map("variant_label") @db.VarChar(120)
+  sku              String   @db.VarChar(80)
+  imageUrl         String?  @map("image_url") @db.VarChar(512)
+  unitPrice        Decimal  @map("unit_price") @db.Decimal(12, 2)
   quantity         Int
-  discountAmount   Decimal         @default(0) @map("discount_amount") @db.Decimal(12, 2)
-  lineTotal        Decimal         @map("line_total") @db.Decimal(12, 2)
-  quantityReturned Int             @default(0) @map("quantity_returned")
-  createdAt        DateTime        @default(now()) @map("created_at")
+  discountAmount   Decimal  @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  lineTotal        Decimal  @map("line_total") @db.Decimal(12, 2)
+  quantityReturned Int      @default(0) @map("quantity_returned")
+  /// Promotion that set unitPrice (flash sale stock is returned to it on cancellation)
+  promotionId      Int?     @map("promotion_id")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   order       Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product     Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
@@ -712,22 +716,24 @@ model OrderItem {
   review      ProductReview?
   returnItems ReturnItem[]
   commission  VendorCommission?
+  promotion   Promotion?        @relation(fields: [promotionId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
+  @@index([promotionId])
   @@index([vendorId, createdAt])
   @@index([productId])
   @@map("order_items")
 }
 
 model OrderStatusHistory {
-  id         Int         @id @default(autoincrement())
-  orderId    Int         @map("order_id")
+  id         Int          @id @default(autoincrement())
+  orderId    Int          @map("order_id")
   fromStatus OrderStatus? @map("from_status")
-  toStatus   OrderStatus @map("to_status")
-  note       String?     @db.VarChar(500)
-  changedBy  Int?        @map("changed_by")
-  createdAt  DateTime    @default(now()) @map("created_at")
-  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  toStatus   OrderStatus  @map("to_status")
+  note       String?      @db.VarChar(500)
+  changedBy  Int?         @map("changed_by")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId, createdAt])
   @@map("order_status_history")
@@ -855,19 +861,19 @@ model ShippingZone {
 }
 
 model ShippingMethod {
-  id                Int          @id @default(autoincrement())
-  zoneId            Int          @map("zone_id")
-  code              String       @db.VarChar(40)
-  name              String       @db.VarChar(100)
-  carrier           String?      @db.VarChar(80)
-  fee               Decimal      @db.Decimal(12, 2)
-  freeOverAmount    Decimal?     @map("free_over_amount") @db.Decimal(12, 2)
-  minDays           Int          @map("min_days")
-  maxDays           Int          @map("max_days")
-  isActive          Boolean      @default(true) @map("is_active")
-  sortOrder         Int          @default(0) @map("sort_order")
-  zone              ShippingZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
-  orders            Order[]
+  id             Int          @id @default(autoincrement())
+  zoneId         Int          @map("zone_id")
+  code           String       @db.VarChar(40)
+  name           String       @db.VarChar(100)
+  carrier        String?      @db.VarChar(80)
+  fee            Decimal      @db.Decimal(12, 2)
+  freeOverAmount Decimal?     @map("free_over_amount") @db.Decimal(12, 2)
+  minDays        Int          @map("min_days")
+  maxDays        Int          @map("max_days")
+  isActive       Boolean      @default(true) @map("is_active")
+  sortOrder      Int          @default(0) @map("sort_order")
+  zone           ShippingZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  orders         Order[]
 
   @@unique([zoneId, code])
   @@map("shipping_methods")
@@ -885,22 +891,22 @@ enum ShipmentStatus {
 }
 
 model Shipment {
-  id             Int             @id @default(autoincrement())
-  orderId        Int             @map("order_id")
-  warehouseId    Int?            @map("warehouse_id")
-  carrier        String          @db.VarChar(80)
-  trackingNumber String?         @unique @map("tracking_number") @db.VarChar(80)
-  status         ShipmentStatus  @default(PENDING)
-  riderName      String?         @map("rider_name") @db.VarChar(120)
-  riderPhone     String?         @map("rider_phone") @db.VarChar(32)
-  dispatchedAt   DateTime?       @map("dispatched_at")
-  deliveredAt    DateTime?       @map("delivered_at")
-  proofOfDelivery String?        @map("proof_of_delivery") @db.VarChar(512)
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
-  order          Order           @relation(fields: [orderId], references: [id])
-  warehouse      Warehouse?      @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
-  events         ShipmentEvent[]
+  id              Int             @id @default(autoincrement())
+  orderId         Int             @map("order_id")
+  warehouseId     Int?            @map("warehouse_id")
+  carrier         String          @db.VarChar(80)
+  trackingNumber  String?         @unique @map("tracking_number") @db.VarChar(80)
+  status          ShipmentStatus  @default(PENDING)
+  riderName       String?         @map("rider_name") @db.VarChar(120)
+  riderPhone      String?         @map("rider_phone") @db.VarChar(32)
+  dispatchedAt    DateTime?       @map("dispatched_at")
+  deliveredAt     DateTime?       @map("delivered_at")
+  proofOfDelivery String?         @map("proof_of_delivery") @db.VarChar(512)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  order           Order           @relation(fields: [orderId], references: [id])
+  warehouse       Warehouse?      @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  events          ShipmentEvent[]
 
   @@index([orderId])
   @@index([status])
@@ -1140,27 +1146,27 @@ enum DiscountType {
 }
 
 model Coupon {
-  id                 Int                @id @default(autoincrement())
-  code               String             @unique @db.VarChar(40)
-  description        String?            @db.VarChar(255)
-  type               DiscountType
-  value              Decimal            @db.Decimal(12, 2)
-  minOrderAmount     Decimal?           @map("min_order_amount") @db.Decimal(12, 2)
-  maxDiscountAmount  Decimal?           @map("max_discount_amount") @db.Decimal(12, 2)
-  usageLimit         Int?               @map("usage_limit")
-  usageLimitPerUser  Int?               @default(1) @map("usage_limit_per_user")
-  usedCount          Int                @default(0) @map("used_count")
-  firstOrderOnly     Boolean            @default(false) @map("first_order_only")
-  promotionId        Int?               @map("promotion_id")
-  startsAt           DateTime?          @map("starts_at")
-  endsAt             DateTime?          @map("ends_at")
-  isActive           Boolean            @default(true) @map("is_active")
-  createdAt          DateTime           @default(now()) @map("created_at")
-  updatedAt          DateTime           @updatedAt @map("updated_at")
-  promotion          Promotion?         @relation(fields: [promotionId], references: [id], onDelete: SetNull)
-  carts              Cart[]
-  orders             Order[]
-  redemptions        CouponRedemption[]
+  id                Int                @id @default(autoincrement())
+  code              String             @unique @db.VarChar(40)
+  description       String?            @db.VarChar(255)
+  type              DiscountType
+  value             Decimal            @db.Decimal(12, 2)
+  minOrderAmount    Decimal?           @map("min_order_amount") @db.Decimal(12, 2)
+  maxDiscountAmount Decimal?           @map("max_discount_amount") @db.Decimal(12, 2)
+  usageLimit        Int?               @map("usage_limit")
+  usageLimitPerUser Int?               @default(1) @map("usage_limit_per_user")
+  usedCount         Int                @default(0) @map("used_count")
+  firstOrderOnly    Boolean            @default(false) @map("first_order_only")
+  promotionId       Int?               @map("promotion_id")
+  startsAt          DateTime?          @map("starts_at")
+  endsAt            DateTime?          @map("ends_at")
+  isActive          Boolean            @default(true) @map("is_active")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  promotion         Promotion?         @relation(fields: [promotionId], references: [id], onDelete: SetNull)
+  carts             Cart[]
+  orders            Order[]
+  redemptions       CouponRedemption[]
 
   @@index([isActive, endsAt])
   @@map("coupons")
@@ -1191,25 +1197,26 @@ enum PromotionType {
 }
 
 model Promotion {
-  id          Int                @id @default(autoincrement())
-  name        String             @db.VarChar(150)
-  slug        String             @unique @db.VarChar(160)
-  type        PromotionType
+  id         Int                @id @default(autoincrement())
+  name       String             @db.VarChar(150)
+  slug       String             @unique @db.VarChar(160)
+  type       PromotionType
   /// Percentage or amount, depending on type
-  value       Decimal?           @db.Decimal(12, 2)
+  value      Decimal?           @db.Decimal(12, 2)
   /// Type-specific rules, e.g. { buyQty: 1, getQty: 1 } or { bundlePrice: "299.00" }
-  rules       Json?
-  campaign    String?            @db.VarChar(100)
-  bannerUrl   String?            @map("banner_url") @db.VarChar(512)
-  headline    String?            @db.VarChar(150)
-  priority    Int                @default(0)
-  startsAt    DateTime           @map("starts_at")
-  endsAt      DateTime           @map("ends_at")
-  isActive    Boolean            @default(true) @map("is_active")
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
-  products    PromotionProduct[]
-  coupons     Coupon[]
+  rules      Json?
+  campaign   String?            @db.VarChar(100)
+  bannerUrl  String?            @map("banner_url") @db.VarChar(512)
+  headline   String?            @db.VarChar(150)
+  priority   Int                @default(0)
+  startsAt   DateTime           @map("starts_at")
+  endsAt     DateTime           @map("ends_at")
+  isActive   Boolean            @default(true) @map("is_active")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+  products   PromotionProduct[]
+  coupons    Coupon[]
+  orderItems OrderItem[]
 
   @@index([isActive, startsAt, endsAt])
   @@map("promotions")
@@ -1380,28 +1387,28 @@ enum ReturnReason {
 }
 
 model Return {
-  id           Int          @id @default(autoincrement())
-  returnNumber String       @unique @map("return_number") @db.VarChar(30)
-  orderId      Int          @map("order_id")
-  userId       Int?         @map("user_id")
-  type         ReturnType   @default(RETURN)
-  status       ReturnStatus @default(REQUESTED)
-  reason       ReturnReason
-  customerNote String?      @map("customer_note") @db.VarChar(1000)
-  adminNote    String?      @map("admin_note") @db.VarChar(1000)
-  images       Json?
-  approvedAt   DateTime?    @map("approved_at")
-  receivedAt   DateTime?    @map("received_at")
-  closedAt     DateTime?    @map("closed_at")
+  id              Int          @id @default(autoincrement())
+  returnNumber    String       @unique @map("return_number") @db.VarChar(30)
+  orderId         Int          @map("order_id")
+  userId          Int?         @map("user_id")
+  type            ReturnType   @default(RETURN)
+  status          ReturnStatus @default(REQUESTED)
+  reason          ReturnReason
+  customerNote    String?      @map("customer_note") @db.VarChar(1000)
+  adminNote       String?      @map("admin_note") @db.VarChar(1000)
+  images          Json?
+  approvedAt      DateTime?    @map("approved_at")
+  receivedAt      DateTime?    @map("received_at")
+  closedAt        DateTime?    @map("closed_at")
   /// Replacement order created for an exchange
-  exchangeOrderId Int?      @unique @map("exchange_order_id")
-  refundAmount Decimal?     @map("refund_amount") @db.Decimal(12, 2)
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
-  order        Order        @relation(fields: [orderId], references: [id])
-  user         User?        @relation(fields: [userId], references: [id])
-  items        ReturnItem[]
-  refunds      Refund[]
+  exchangeOrderId Int?         @unique @map("exchange_order_id")
+  refundAmount    Decimal?     @map("refund_amount") @db.Decimal(12, 2)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  order           Order        @relation(fields: [orderId], references: [id])
+  user            User?        @relation(fields: [userId], references: [id])
+  items           ReturnItem[]
+  refunds         Refund[]
 
   @@index([orderId])
   @@index([status, createdAt])
@@ -1465,24 +1472,24 @@ enum SettlementStatus {
 }
 
 model VendorSettlement {
-  id                Int                @id @default(autoincrement())
-  vendorId          Int                @map("vendor_id")
-  reference         String             @unique @db.VarChar(40)
-  periodStart       DateTime           @map("period_start") @db.Date
-  periodEnd         DateTime           @map("period_end") @db.Date
-  grossAmount       Decimal            @map("gross_amount") @db.Decimal(12, 2)
-  commissionAmount  Decimal            @map("commission_amount") @db.Decimal(12, 2)
-  adjustments       Decimal            @default(0) @db.Decimal(12, 2)
-  netAmount         Decimal            @map("net_amount") @db.Decimal(12, 2)
-  currency          String             @default("GHS") @db.Char(3)
-  status            SettlementStatus   @default(DRAFT)
-  payoutReference   String?            @map("payout_reference") @db.VarChar(128)
-  approvedBy        Int?               @map("approved_by")
-  paidAt            DateTime?          @map("paid_at")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  vendor            Vendor             @relation(fields: [vendorId], references: [id])
-  commissions       VendorCommission[]
+  id               Int                @id @default(autoincrement())
+  vendorId         Int                @map("vendor_id")
+  reference        String             @unique @db.VarChar(40)
+  periodStart      DateTime           @map("period_start") @db.Date
+  periodEnd        DateTime           @map("period_end") @db.Date
+  grossAmount      Decimal            @map("gross_amount") @db.Decimal(12, 2)
+  commissionAmount Decimal            @map("commission_amount") @db.Decimal(12, 2)
+  adjustments      Decimal            @default(0) @db.Decimal(12, 2)
+  netAmount        Decimal            @map("net_amount") @db.Decimal(12, 2)
+  currency         String             @default("GHS") @db.Char(3)
+  status           SettlementStatus   @default(DRAFT)
+  payoutReference  String?            @map("payout_reference") @db.VarChar(128)
+  approvedBy       Int?               @map("approved_by")
+  paidAt           DateTime?          @map("paid_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  vendor           Vendor             @relation(fields: [vendorId], references: [id])
+  commissions      VendorCommission[]
 
   @@index([vendorId, status])
   @@map("vendor_settlements")
@@ -1522,4 +1529,32 @@ model SystemSetting {
 
   @@unique([group, key])
   @@map("system_settings")
+}
+
+enum OutboxStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+/// Outgoing email and SMS, delivered by a background worker with retries.
+model MessageOutbox {
+  id            Int                 @id @default(autoincrement())
+  channel       NotificationChannel
+  recipient     String              @db.VarChar(191)
+  userId        Int?                @map("user_id")
+  template      String              @db.VarChar(60)
+  subject       String?             @db.VarChar(200)
+  body          String              @db.Text
+  status        OutboxStatus        @default(PENDING)
+  attempts      Int                 @default(0)
+  lastError     String?             @map("last_error") @db.VarChar(500)
+  nextAttemptAt DateTime            @default(now()) @map("next_attempt_at")
+  sentAt        DateTime?           @map("sent_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+
+  @@index([status, nextAttemptAt])
+  @@index([userId])
+  @@map("message_outbox")
 }

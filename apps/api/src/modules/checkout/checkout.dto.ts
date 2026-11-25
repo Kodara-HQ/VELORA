@@ -1,7 +1,8 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
-  IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested,
+  IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested, Min, Max,
 } from 'class-validator';
 import { GHANA_REGIONS } from '@velora/shared';
 import { GH_PHONE_RULE } from '../auth/dto/auth.dto';
@@ -61,6 +62,10 @@ export class QuoteDto {
   @ApiPropertyOptional({ description: 'Guest email, so first-order and per-customer coupon rules can be checked' })
   @IsOptional() @IsEmail() @MaxLength(191)
   email?: string;
+
+  @ApiPropertyOptional({ description: 'Loyalty points to spend on this order (signed-in customers)' })
+  @IsOptional() @IsInt() @Min(0) @Max(10_000_000)
+  redeemPoints?: number;
 }
 
 /** Accepted values. Whether an online provider is actually configured is checked when the order is placed. */
@@ -94,6 +99,10 @@ export class PlaceOrderDto {
   @ApiPropertyOptional({ description: 'Total the shopper saw; if prices changed the order is refused (409 PRICE_CHANGED)' })
   @IsOptional() @Matches(/^\d+(\.\d{1,2})?$/)
   expectedTotal?: string;
+
+  @ApiPropertyOptional({ description: 'Loyalty points to spend on this order (signed-in customers)' })
+  @IsOptional() @IsInt() @Min(0) @Max(10_000_000)
+  redeemPoints?: number;
 }
 
 export class LookupDto {

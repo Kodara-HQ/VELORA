@@ -8,4 +8,6 @@ export default function globalSetup() {
   const env = { ...process.env };
   execSync('npx prisma migrate deploy', { cwd, env, stdio: 'pipe' });
   execSync('npx ts-node --transpile-only prisma/seed.ts', { cwd, env, stdio: 'pipe' });
+  // Prices in the tests are list prices: remove any demo sales an earlier seed created.
+  execSync('npx prisma db execute --stdin --schema prisma/schema.prisma', { cwd, env, stdio: 'pipe', input: "DELETE FROM promotions WHERE slug IN ('weekend-flash-sale', 'kente-week');" });
 }

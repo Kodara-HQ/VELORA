@@ -36,6 +36,7 @@ export const presentLine = (l: PricedLine) => ({
   image: l.image, sku: l.sku, color: l.color, size: l.size, variantLabel: l.variantLabel,
   unitPrice: fmt(l.unitPrice), compareAtPrice: fmt(l.compareAtPrice), quantity: l.quantity,
   available: Math.min(l.available, MAX_QTY_PER_LINE), lineTotal: fmt(l.lineTotal), issue: l.issue,
+  promotion: l.promotion && { name: l.promotion.name, slug: l.promotion.slug, endsAt: l.promotion.endsAt, stockLeft: l.promotion.stockLeft },
 });
 
 @Injectable()
@@ -68,7 +69,7 @@ export class CartService {
   async view(v: ViewerRef) {
     const cart = await this.find(v);
     if (!cart) return this.empty();
-    const lines = cart.items.map((i) => this.pricing.priceLine(i));
+    const lines = await this.pricing.priceItems(cart.items);
     const subtotal = this.pricing.subtotal(lines);
     let coupon = null;
     let discount = new Prisma.Decimal(0);
@@ -142,7 +143,7 @@ export class CartService {
     if (!cart || !cart.items.length) throw new BadRequestException('Add something to your bag before using a code');
     const coupon = await this.pricing.findCoupon(code);
     if (!coupon) throw new BadRequestException({ message: "We don't recognise that code", code: 'COUPON_INVALID' });
-    const subtotal = this.pricing.subtotal(cart.items.map((i) => this.pricing.priceLine(i)));
+    const subtotal = this.pricing.subtotal(await this.pricing.priceItems(cart.items));
     const r = await this.pricing.evaluateCoupon(coupon, { subtotal, userId: v.userId, email: v.email });
     if (!r.valid) throw new BadRequestException({ message: r.reason, code: 'COUPON_INVALID' });
     await this.prisma.cart.update({ where: { id: cart.id }, data: { couponId: coupon.id } });

@@ -16,9 +16,11 @@ import { Paginated, PaginationQuery } from '../../common/dto/pagination.dto';
 import { requestContext } from '../../common/utils/request';
 import type { RequestContext } from '../../common/types';
 import { AuditService } from '../audit/audit.module';
+import { MessagingService } from '../notifications/messaging.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { orderInclude, presentOrder } from '../orders/order-presenter';
 import { OrderLifecycleService } from '../orders/order-lifecycle.service';
+import { LoyaltyService } from '../loyalty/loyalty.module';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
@@ -62,6 +64,8 @@ export class AdminOrdersService {
     private readonly inventory: InventoryService,
     private readonly audit: AuditService,
     private readonly lifecycle: OrderLifecycleService,
+    private readonly loyalty: LoyaltyService,
+    private readonly messaging: MessagingService,
   ) {}
 
   async list(q: AdminOrderQuery) {
@@ -177,6 +181,7 @@ export class AdminOrdersService {
           events: { create: { status: ShipmentStatus.DISPATCHED, description: `Handed to ${dto.carrier}` } },
         },
       });
+      await this.messaging.orderEvent(tx, o.id, 'shipped');
       await this.audit.log({ userId: user.id, action: 'orders.shipped', entityType: 'order', entityId: o.orderNumber, newValues: { ...dto }, ctx }, tx);
     }, { timeout: 20_000 });
     return this.get(orderNumber);
@@ -186,10 +191,9 @@ export class AdminOrdersService {
   async deliver(user: AuthUser, orderNumber: string, ctx: RequestContext) {
     const o = await this.load(orderNumber);
     if (o.status !== OrderStatus.SHIPPED) throw new ConflictException('Only shipped orders can be marked delivered');
-    const settings = await this.prisma.systemSetting.findMany({ where: { OR: [{ group: 'loyalty' }, { group: 'marketplace' }] } });
+    const settings = await this.prisma.systemSetting.findMany({ where: { group: 'marketplace' } });
     const setting = (g: string, k: string, d: number) => Number(settings.find((s) => s.group === g && s.key === k)?.value ?? d);
     const holdDays = setting('marketplace', 'settlementHoldDays', 14);
-    const pointsPerCedi = setting('loyalty', 'pointsPerCedi', 1);
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
@@ -208,15 +212,9 @@ export class AdminOrdersService {
       });
       if (o.userId) {
         await tx.customer.updateMany({ where: { userId: o.userId }, data: { lifetimeValue: { increment: o.grandTotal } } });
-        const points = Math.floor(Number(o.grandTotal.sub(o.shippingTotal)) * pointsPerCedi);
-        if (points > 0) {
-          const acct = await tx.loyaltyAccount.upsert({ where: { userId: o.userId }, create: { userId: o.userId }, update: {} });
-          const updated = await tx.loyaltyAccount.update({ where: { id: acct.id }, data: { pointsBalance: { increment: points }, lifetimePoints: { increment: points } } });
-          const tier = updated.lifetimePoints >= 20000 ? 'PLATINUM' : updated.lifetimePoints >= 8000 ? 'GOLD' : updated.lifetimePoints >= 2500 ? 'SILVER' : 'BRONZE';
-          if (tier !== updated.tier) await tx.loyaltyAccount.update({ where: { id: acct.id }, data: { tier } });
-          await tx.loyaltyTransaction.create({ data: { accountId: acct.id, type: 'EARN', points, balanceAfter: updated.pointsBalance, orderId: o.id, description: `Order ${o.orderNumber}` } });
-        }
       }
+      await this.loyalty.earnForOrder(tx, o);
+      await this.messaging.orderEvent(tx, o.id, 'delivered');
       await this.audit.log({ userId: user.id, action: 'orders.delivered', entityType: 'order', entityId: o.orderNumber, ctx }, tx);
     }, { timeout: 20_000 });
     return this.get(orderNumber);

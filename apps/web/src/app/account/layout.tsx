@@ -13,6 +13,9 @@ const NAV = [
   { href: '/account/returns', label: 'Returns' },
   { href: '/account/wishlist', label: 'Wishlist' },
   { href: '/account/addresses', label: 'Addresses' },
+  { href: '/account/loyalty', label: 'Rewards' },
+  { href: '/account/reviews', label: 'Reviews' },
+  { href: '/account/notifications', label: 'Notifications' },
 ];
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {

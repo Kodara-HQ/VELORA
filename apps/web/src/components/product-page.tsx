@@ -10,6 +10,7 @@ import { ChevronIcon, ReturnIcon, ShieldIcon, TruckIcon } from './icons';
 import { Stars } from './product-card';
 import { Badge, Button, cx } from './ui';
 import { VariantPicker } from './variant-picker';
+import { PromoStrip } from './flash-sale';
 
 /** Gallery + buy box. Picking a colour swaps the gallery to that colourway's images. */
 export function ProductHero({ product }: { product: ProductDetail }) {
@@ -68,6 +69,7 @@ export function ProductHero({ product }: { product: ProductDetail }) {
           <span>Style {product.styleCode}</span>
           {product.vendor && <a href={`/v/${product.vendor.slug}`} className="hover:text-ink"><Badge tone="outline">Sold by {product.vendor.name}</Badge></a>}
         </div>
+        {product.promotion && <PromoStrip promo={product.promotion} />}
         {product.shortDescription && <p className="mt-5 leading-relaxed text-muted">{product.shortDescription}</p>}
         <div className="mt-6">
           <VariantPicker product={product} onColorChange={(c) => { setColor(c); setIndex(0); }} />

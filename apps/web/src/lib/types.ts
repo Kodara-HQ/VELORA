@@ -1,5 +1,7 @@
 /** Shapes returned by the storefront API (money is always a decimal string). */
 
+export interface PromoBadge { name: string; slug: string; type: 'FLASH_SALE' | 'PERCENTAGE_OFF' | 'FIXED_AMOUNT_OFF'; endsAt: string; stockLeft: number | null; percentOff: number }
+
 export interface ProductCard {
   id: number;
   slug: string;
@@ -16,6 +18,7 @@ export interface ProductCard {
   reviewCount: number;
   inStock: boolean;
   isNew: boolean;
+  promotion?: PromoBadge | null;
 }
 
 export interface CategoryTreeNode {
@@ -70,6 +73,7 @@ export interface ProductDetail {
   reviewSummary: { average: number; total: number; distribution: Array<{ rating: number; count: number }> };
   questions: Array<{ id: number; question: string; answer: string; answeredAt: string }>;
   delivery: Array<{ zone: string; method: string; fee: string; freeOver: string | null; minDays: number; maxDays: number }>;
+  promotion: PromoBadge | null;
 }
 
 export interface Review {
@@ -109,6 +113,7 @@ export interface CartLine {
   available: number;
   lineTotal: string;
   issue: 'UNAVAILABLE' | 'OUT_OF_STOCK' | 'INSUFFICIENT_STOCK' | null;
+  promotion: { name: string; slug: string; endsAt: string; stockLeft: number | null } | null;
 }
 
 export interface Cart {
@@ -147,6 +152,7 @@ export interface Quote {
   taxIncluded: string;
   grandTotal: string;
   coupon: { code: string; valid: boolean; reason: string | null; discount: string } | null;
+  loyalty: { balance: number; maxPoints: number; points: number; value: string } | null;
   issues: Array<{ sku: string; name: string; issue: string; available: number }>;
 }
 
@@ -183,6 +189,8 @@ export interface Order {
   taxTotal: string;
   grandTotal: string;
   couponCode: string | null;
+  loyaltyPointsUsed: number;
+  loyaltyDiscount: string;
   shippingAddress: Omit<Address, 'id' | 'isDefault'>;
   shippingMethod: { name: string; minDays: number; maxDays: number; carrier: string | null } | null;
   estimatedDelivery: { from: string; to: string } | null;
@@ -244,3 +252,17 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   REFUNDED: 'Refunded',
   PARTIALLY_REFUNDED: 'Partly refunded',
 };
+
+export interface LiveSale {
+  name: string; slug: string; type: PromoBadge['type']; headline: string | null; bannerUrl: string | null;
+  startsAt: string; endsAt: string; state: 'LIVE' | 'SCHEDULED'; value: string | null; products: ProductCard[];
+}
+
+export interface LoyaltySummary {
+  pointsBalance: number; lifetimePoints: number; tier: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM'; pointsValue: string; multiplier: number; perks: string[];
+  nextTier: { tier: string; pointsNeeded: number; min: number; currentMin: number } | null;
+  referral: { code: string; bonusPoints: number; friendBonusPoints: number; invited: number; rewarded: number };
+  rules: { pointsPerCedi: number; cediPerPoint: number; minRedeemPoints: number; maxRedeemPercent: number; reviewBonusPoints: number };
+}
+
+export interface SearchMeta { query: string; correctedFrom: string | null; engine: 'meilisearch' | 'builtin' }
