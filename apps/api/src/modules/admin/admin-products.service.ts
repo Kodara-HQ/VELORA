@@ -6,6 +6,7 @@ import { Paginated } from '../../common/dto/pagination.dto';
 import type { RequestContext } from '../../common/types';
 import { AuditService } from '../audit/audit.module';
 import { CatalogService } from '../catalog/catalog.service';
+import { NotificationsService } from '../notifications/notifications.module';
 import { parseCsv } from './admin-common';
 import type { AdminProductQuery, ProductInput, VariantInput } from './admin-products.dto';
 
@@ -33,6 +34,7 @@ export class AdminProductsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly catalog: CatalogService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(q: AdminProductQuery) {
@@ -251,6 +253,15 @@ export class AdminProductsService {
         data: { status, rejectionReason: status === 'REJECTED' ? reason : null, ...(status === 'ACTIVE' && !p.publishedAt && { publishedAt: new Date() }) },
       });
       await this.audit.log({ userId: user.id, action: `products.status_${status.toLowerCase()}`, entityType: 'product', entityId: id, oldValues: { status: p.status }, newValues: { status, reason }, ctx }, tx);
+      // Tell the vendor when staff decide on their submission.
+      if (p.vendorId && p.status === 'PENDING_REVIEW' && (status === 'ACTIVE' || status === 'REJECTED') && user.vendorId !== p.vendorId) {
+        const vendor = await tx.vendor.findUnique({ where: { id: p.vendorId }, select: { ownerUserId: true } });
+        if (vendor) {
+          await this.notifications.notify(vendor.ownerUserId, status === 'ACTIVE'
+            ? { type: 'product.approved', title: 'Product approved', body: `“${p.name}” is now live in the store.`, data: { href: `/vendor/products/${id}` } }
+            : { type: 'product.rejected', title: 'Product needs changes', body: `“${p.name}” was not approved: ${reason}`, data: { href: `/vendor/products/${id}` } }, tx);
+        }
+      }
     });
     return this.get(id);
   }

@@ -150,6 +150,13 @@ async function seedVendors() {
       },
     });
   }
+  // Every vendor has its own stock location (code VND-<id>), as created on approval.
+  await prisma.warehouse.upsert({
+    where: { code: `VND-${kente.id}` },
+    update: {},
+    create: { code: `VND-${kente.id}`, name: 'Adinkra Atelier (vendor stock)', vendorId: kente.id, city: 'Kumasi', region: 'Ashanti', phone: '+233244000010' },
+  });
+  await prisma.vendor.update({ where: { id: kente.id }, data: { payoutDetails: { accountName: 'Akua Sarpong', number: '+233244000010' } } });
   console.log('✓ 1 active vendor, 1 pending application');
   return kente;
 }

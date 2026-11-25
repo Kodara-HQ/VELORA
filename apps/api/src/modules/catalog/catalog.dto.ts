@@ -19,6 +19,10 @@ export class ProductQuery extends PaginationQuery {
   @IsOptional() @Transform(toList) @IsString({ each: true })
   brand?: string[];
 
+  @ApiPropertyOptional({ description: 'Vendor shop slug' })
+  @IsOptional() @IsString() @Matches(/^[a-z0-9-]+$/) @MaxLength(160)
+  vendor?: string;
+
   @ApiPropertyOptional({ description: 'Comma-separated colour names' })
   @IsOptional() @Transform(toList) @IsString({ each: true })
   color?: string[];
@@ -50,6 +54,9 @@ export class ProductQuery extends PaginationQuery {
 }
 
 export class FacetQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^[a-z0-9-]+$/) @MaxLength(160)
+  vendor?: string;
+
   @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^[a-z0-9-]+$/) @MaxLength(140)
   category?: string;
 

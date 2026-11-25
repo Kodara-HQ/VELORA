@@ -253,6 +253,7 @@ export class AdminTaxonomyController {
   imports: [CatalogModule],
   controllers: [AdminProductsController, AdminTaxonomyController],
   providers: [AdminProductsService, AdminTaxonomyService],
+  exports: [AdminProductsService],
 })
 export class AdminCatalogModule {}
 

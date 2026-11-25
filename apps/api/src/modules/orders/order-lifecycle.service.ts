@@ -26,7 +26,7 @@ export class OrderLifecycleService {
     await this.inventory.releaseForOrder(tx, orderId, o.by, o.historyNote);
     await tx.orderStatusHistory.create({ data: { orderId, fromStatus: order.status, toStatus: OrderStatus.CANCELLED, note: o.historyNote, changedBy: o.by } });
     await tx.payment.updateMany({ where: { orderId, status: { in: [PaymentTxnStatus.INITIATED, PaymentTxnStatus.PENDING] } }, data: { status: PaymentTxnStatus.ABANDONED } });
-    await tx.vendorCommission.updateMany({ where: { orderItem: { orderId } }, data: { status: CommissionStatus.REVERSED } });
+    await tx.vendorCommission.updateMany({ where: { orderItem: { orderId }, status: { in: [CommissionStatus.PENDING, CommissionStatus.ELIGIBLE] } }, data: { status: CommissionStatus.REVERSED } });
     if (order.couponId) {
       const deleted = await tx.couponRedemption.deleteMany({ where: { orderId } });
       if (deleted.count) await tx.$executeRaw`UPDATE coupons SET used_count = GREATEST(used_count - 1, 0) WHERE id = ${order.couponId}`;
@@ -70,7 +70,12 @@ export class OrderLifecycleService {
 
     if (refund.return) {
       await tx.return.update({ where: { id: refund.return.id }, data: { status: ReturnStatus.REFUNDED, closedAt: new Date() } });
-      await tx.vendorCommission.updateMany({ where: { orderItemId: { in: refund.return.items.map((i) => i.orderItemId) } }, data: { status: CommissionStatus.REVERSED } });
+      // Earnings still on hold are cancelled. Already-settled ones are not rewritten: the hold period
+      // (settlementHoldDays) is set to outlast the return window so this is the rare exception.
+      await tx.vendorCommission.updateMany({
+        where: { orderItemId: { in: refund.return.items.map((i) => i.orderItemId) }, status: { in: [CommissionStatus.PENDING, CommissionStatus.ELIGIBLE] } },
+        data: { status: CommissionStatus.REVERSED },
+      });
     }
 
     // Lifetime value and loyalty only ever counted delivered merchandise, so only claw back what was granted.

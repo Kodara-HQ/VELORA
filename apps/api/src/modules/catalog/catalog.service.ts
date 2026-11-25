@@ -101,7 +101,7 @@ export class CatalogService {
     return this.prisma.brand.findMany({
       where: { deletedAt: null, ...(featuredOnly && { isFeatured: true }) },
       orderBy: { name: 'asc' },
-      select: { name: true, slug: true, logoUrl: true, isFeatured: true },
+      select: { id: true, name: true, slug: true, logoUrl: true, isFeatured: true },
     });
   }
 
@@ -146,6 +146,7 @@ export class CatalogService {
   async list(q: ProductQuery) {
     const and = await this.baseWhere(q.category, q.q);
     if (q.brand?.length) and.push({ brand: { slug: { in: q.brand } } });
+    if (q.vendor) and.push({ vendor: { slug: q.vendor } });
     if (q.color?.length || q.size?.length) {
       and.push({
         variants: {
@@ -175,7 +176,9 @@ export class CatalogService {
 
   /** Filter options for a category or search, with counts. */
   async facets(q: FacetQuery) {
-    const where: Prisma.ProductWhereInput = { AND: await this.baseWhere(q.category, q.q) };
+    const base = await this.baseWhere(q.category, q.q);
+    if (q.vendor) base.push({ vendor: { slug: q.vendor } });
+    const where: Prisma.ProductWhereInput = { AND: base };
     const [brandGroups, price, variants] = await Promise.all([
       this.prisma.product.groupBy({ by: ['brandId'], where, _count: { _all: true } }),
       this.prisma.product.aggregate({ where, _min: { basePrice: true }, _max: { basePrice: true } }),

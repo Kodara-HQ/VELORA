@@ -23,6 +23,9 @@ import { AdminCustomersModule } from './modules/admin/admin-customers.module';
 import { OrderLifecycleModule } from './modules/orders/order-lifecycle.service';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { ReturnsModule } from './modules/returns/returns.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { VendorsModule } from './modules/vendors/vendors.module';
+import { VendorPortalModule } from './modules/vendors/vendor-portal.module';
 import { JwtAuthGuard, PermissionsGuard } from './common/guards/auth.guards';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor';
@@ -49,6 +52,9 @@ import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor'
     OrderLifecycleModule,
     PaymentsModule,
     ReturnsModule,
+    NotificationsModule,
+    VendorsModule,
+    VendorPortalModule,
     UploadsModule,
     AdminDashboardModule,
     AdminCatalogModule,
