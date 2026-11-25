@@ -18,6 +18,7 @@ import type { RequestContext } from '../../common/types';
 import { AuditService } from '../audit/audit.module';
 import { InventoryService } from '../inventory/inventory.service';
 import { orderInclude, presentOrder } from '../orders/order-presenter';
+import { OrderLifecycleService } from '../orders/order-lifecycle.service';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
@@ -60,6 +61,7 @@ export class AdminOrdersService {
     private readonly prisma: PrismaService,
     private readonly inventory: InventoryService,
     private readonly audit: AuditService,
+    private readonly lifecycle: OrderLifecycleService,
   ) {}
 
   async list(q: AdminOrderQuery) {
@@ -224,18 +226,7 @@ export class AdminOrdersService {
     const o = await this.load(orderNumber);
     if (!CANCELLABLE.includes(o.status)) throw new ConflictException('Dispatched or completed orders cannot be cancelled. Use a return instead.');
     await this.prisma.$transaction(async (tx) => {
-      await this.transition(tx, o, OrderStatus.CANCELLED, CANCELLABLE, user.id, `Cancelled by VÉLORA: ${reason}`, { cancelledAt: new Date(), cancelReason: reason });
-      await this.inventory.releaseForOrder(tx, o.id, user.id, `Cancelled by staff: ${reason}`);
-      await tx.payment.updateMany({ where: { orderId: o.id, status: { in: [PaymentTxnStatus.INITIATED, PaymentTxnStatus.PENDING] } }, data: { status: PaymentTxnStatus.ABANDONED } });
-      await tx.vendorCommission.updateMany({ where: { orderItem: { orderId: o.id } }, data: { status: CommissionStatus.REVERSED } });
-      if (o.couponId) {
-        const deleted = await tx.couponRedemption.deleteMany({ where: { orderId: o.id } });
-        if (deleted.count) await tx.$executeRaw`UPDATE coupons SET used_count = GREATEST(used_count - 1, 0) WHERE id = ${o.couponId}`;
-      }
-      if (o.paymentStatus === PaymentStatus.PAID) {
-        await tx.refund.create({ data: { orderId: o.id, amount: o.grandTotal, reason: `Order cancelled: ${reason}`, status: 'REQUESTED' } });
-      }
-      if (o.userId) await tx.customer.updateMany({ where: { userId: o.userId, orderCount: { gt: 0 } }, data: { orderCount: { decrement: 1 } } });
+      await this.lifecycle.cancel(tx, o.id, { by: user.id, reason, historyNote: `Cancelled by VÉLORA: ${reason}` });
       await this.audit.log({ userId: user.id, action: 'orders.cancelled', entityType: 'order', entityId: o.orderNumber, newValues: { reason }, ctx }, tx);
     }, { timeout: 20_000 });
     return this.get(orderNumber);

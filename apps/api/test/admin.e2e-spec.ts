@@ -31,7 +31,7 @@ describe('Administration (e2e)', () => {
 
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = configureApp(mod.createNestApplication());
+    app = configureApp(mod.createNestApplication({ rawBody: true }));
     await app.init();
     prisma = app.get(PrismaService);
     tokens.super = await login('admin@velora.test', 'Test-Super-Admin-123');

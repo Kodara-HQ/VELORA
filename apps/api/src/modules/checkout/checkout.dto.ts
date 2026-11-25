@@ -63,7 +63,8 @@ export class QuoteDto {
   email?: string;
 }
 
-export const PAYMENT_METHODS_AVAILABLE = ['CASH_ON_DELIVERY'] as const;
+/** Accepted values. Whether an online provider is actually configured is checked when the order is placed. */
+export const PAYMENT_METHODS_AVAILABLE = ['CASH_ON_DELIVERY', 'PAYSTACK', 'HUBTEL', 'SIMULATOR'] as const;
 
 export class PlaceOrderDto {
   @ApiPropertyOptional({ description: 'Required for guests; optional override for signed-in customers' })

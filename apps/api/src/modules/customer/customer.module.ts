@@ -3,7 +3,7 @@ import {
   NotFoundException, Param, ParseIntPipe, Patch, Post, Put, Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
-import { CommissionStatus, OrderStatus, PaymentTxnStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsEmail, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { Throttle } from '@nestjs/throttler';
@@ -13,9 +13,9 @@ import { CurrentUser, Public } from '../../common/decorators';
 import { Paginated, PaginationQuery } from '../../common/dto/pagination.dto';
 import { GH_PHONE_RULE } from '../auth/dto/auth.dto';
 import { AddressInput } from '../checkout/checkout.dto';
-import { InventoryService } from '../inventory/inventory.service';
+import { OrderLifecycleService } from '../orders/order-lifecycle.service';
 import { cardSelect, toCard, visibleWhere } from '../catalog/product-card';
-import { CUSTOMER_CANCELLABLE, orderInclude, orderSummary, presentOrder } from '../orders/order-presenter';
+import { orderInclude, orderSummary, presentOrder } from '../orders/order-presenter';
 
 class UpdateProfileDto {
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => value?.trim()) @IsString() @MinLength(1) @MaxLength(100) firstName?: string;
@@ -52,7 +52,7 @@ const addressSelect = {
 export class CustomerService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly inventory: InventoryService,
+    private readonly lifecycle: OrderLifecycleService,
   ) {}
 
   async overview(userId: number) {
@@ -157,32 +157,14 @@ export class CustomerService {
   }
 
   /** Customer cancellation: releases reserved stock, voids the coupon use and reverses vendor commissions atomically. */
+  /** Customer cancellation (before dispatch). Stock, coupon, commissions and any payment are unwound by the shared lifecycle. */
   async cancel(userId: number, orderNumber: string, reason?: string) {
     const o = await this.prisma.order.findFirst({ where: { orderNumber, userId }, include: orderInclude });
     if (!o) throw new NotFoundException('Order not found');
     if (!presentOrder(o).canCancel) {
       throw new ConflictException({ message: 'This order has already been dispatched and can no longer be cancelled. You can request a return after delivery.', code: 'NOT_CANCELLABLE' });
     }
-    await this.prisma.$transaction(async (tx) => {
-      const claimed = await tx.order.updateMany({
-        where: { id: o.id, status: { in: CUSTOMER_CANCELLABLE } },
-        data: { status: OrderStatus.CANCELLED, cancelledAt: new Date(), cancelReason: reason?.trim() || 'Cancelled by customer' },
-      });
-      if (claimed.count !== 1) throw new ConflictException('This order can no longer be cancelled');
-      await this.inventory.releaseForOrder(tx, o.id, userId, 'Cancelled by customer');
-      await tx.orderStatusHistory.create({ data: { orderId: o.id, fromStatus: o.status, toStatus: OrderStatus.CANCELLED, note: 'Cancelled by customer', changedBy: userId } });
-      await tx.payment.updateMany({ where: { orderId: o.id, status: { in: [PaymentTxnStatus.INITIATED, PaymentTxnStatus.PENDING] } }, data: { status: PaymentTxnStatus.ABANDONED } });
-      await tx.vendorCommission.updateMany({ where: { orderItem: { orderId: o.id } }, data: { status: CommissionStatus.REVERSED } });
-      if (o.couponId) {
-        const deleted = await tx.couponRedemption.deleteMany({ where: { orderId: o.id } });
-        if (deleted.count) await tx.$executeRaw`UPDATE coupons SET used_count = GREATEST(used_count - 1, 0) WHERE id = ${o.couponId}`;
-      }
-      // Paid-online orders get an automatic refund request (processed by Finance in Phase 4).
-      if (o.paymentStatus === 'PAID') {
-        await tx.refund.create({ data: { orderId: o.id, amount: o.grandTotal, reason: 'Customer cancelled before dispatch', status: 'REQUESTED' } });
-      }
-      await tx.customer.updateMany({ where: { userId, orderCount: { gt: 0 } }, data: { orderCount: { decrement: 1 } } });
-    });
+    await this.prisma.$transaction((tx) => this.lifecycle.cancel(tx, o.id, { by: userId, reason: reason?.trim() || 'Cancelled by customer', historyNote: 'Cancelled by customer' }));
     return this.order(userId, orderNumber);
   }
 

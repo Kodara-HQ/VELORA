@@ -5,6 +5,8 @@ export const orderInclude = {
   shippingMethod: { select: { name: true, minDays: true, maxDays: true, carrier: true } },
   payments: { orderBy: { createdAt: 'desc' }, select: { method: true, provider: true, status: true, reference: true, amount: true } },
   statusHistory: { orderBy: { createdAt: 'asc' }, select: { toStatus: true, note: true, createdAt: true } },
+  refunds: { orderBy: { createdAt: 'asc' }, select: { amount: true, status: true, reason: true, createdAt: true, processedAt: true } },
+  returns: { orderBy: { createdAt: 'desc' }, select: { returnNumber: true, type: true, status: true, createdAt: true } },
   shipments: { select: { carrier: true, trackingNumber: true, status: true, dispatchedAt: true, deliveredAt: true,
     events: { orderBy: { occurredAt: 'desc' }, select: { status: true, description: true, location: true, occurredAt: true } } } },
 } satisfies Prisma.OrderInclude;
@@ -54,6 +56,11 @@ export function presentOrder(o: OrderFull) {
     history: o.statusHistory.map((h) => ({ status: h.toStatus, note: h.note, at: h.createdAt })),
     shipments: o.shipments,
     canCancel: CUSTOMER_CANCELLABLE.includes(o.status) && !dispatched,
+    paymentDueAt: o.paymentDueAt,
+    canPay: o.status === OrderStatus.PENDING_PAYMENT && (!o.paymentDueAt || o.paymentDueAt > new Date()),
+    refunds: o.refunds.map((r) => ({ ...r, amount: r.amount.toFixed(2) })),
+    returns: o.returns,
+    deliveredAt: o.shipments.find((s) => s.deliveredAt)?.deliveredAt ?? null,
     cancelReason: o.cancelReason,
   };
 }

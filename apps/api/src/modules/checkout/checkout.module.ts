@@ -18,6 +18,7 @@ import { CartModule, CartService } from '../cart/cart.module';
 import { fmt, PricingService } from '../cart/pricing.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { orderInclude, presentOrder } from '../orders/order-presenter';
+import { PaymentsService, type NextAction, type OnlineProvider } from '../payments/payments.service';
 import { AddressInput, LookupDto, PlaceOrderDto, QuoteDto } from './checkout.dto';
 
 class RegionQuery {
@@ -43,6 +44,7 @@ export class CheckoutService {
     private readonly pricing: PricingService,
     private readonly cart: CartService,
     private readonly inventory: InventoryService,
+    private readonly payments: PaymentsService,
   ) {}
 
   private async pricedCart(v: ViewerRef, email: string | null) {
@@ -89,7 +91,13 @@ export class CheckoutService {
     const prior = await this.findByKey(idempotencyKey, v, dto.contact?.email);
     if (prior) return prior;
 
-    // 2. Who and where.
+    // 2. The payment method must be one that is actually configured right now.
+    const online = dto.paymentMethod !== 'CASH_ON_DELIVERY';
+    if (online && !this.payments.gateway(dto.paymentMethod as PaymentProvider)) {
+      throw new BadRequestException({ message: 'That payment method is not available. Please choose another.', code: 'PAYMENT_METHOD_UNAVAILABLE' });
+    }
+
+    // 3. Who and where.
     const account = v.userId ? await this.prisma.user.findUniqueOrThrow({ where: { id: v.userId }, select: { email: true, phone: true } }) : null;
     if (!account && !dto.contact) throw new BadRequestException({ message: 'Enter your email and phone so we can send updates', code: 'CONTACT_REQUIRED' });
     const email = dto.contact?.email ?? account!.email;
@@ -133,8 +141,9 @@ export class CheckoutService {
             userId: v.userId,
             guestEmail: email,
             guestPhone: contactPhone,
-            status: OrderStatus.PROCESSING,
+            status: online ? OrderStatus.PENDING_PAYMENT : OrderStatus.PROCESSING,
             paymentStatus: PaymentStatus.PENDING,
+            paymentDueAt: online ? new Date(Date.now() + this.payments.ttlMinutes() * 60_000) : null,
             subtotal: totals.subtotal, discountTotal: totals.discountTotal, shippingTotal: totals.shippingTotal,
             taxTotal: totals.taxTotal, grandTotal: totals.grandTotal,
             couponId: coupon?.coupon.id, couponCode: coupon?.coupon.code,
@@ -189,19 +198,27 @@ export class CheckoutService {
           await tx.couponRedemption.create({ data: { couponId: coupon.coupon.id, userId: v.userId, orderId: order.id, discountAmount: totals.discountTotal } });
         }
 
-        await tx.payment.create({
-          data: {
-            orderId: order.id, provider: PaymentProvider.CASH_ON_DELIVERY, method: PaymentMethod.CASH,
-            reference: `PAY-${order.orderNumber}-${randomBytes(3).toString('hex').toUpperCase()}`,
-            amount: totals.grandTotal, status: PaymentTxnStatus.PENDING, payerPhone: contactPhone,
-          },
-        });
-        await tx.orderStatusHistory.create({
-          data: { orderId: order.id, toStatus: OrderStatus.PROCESSING, note: 'Order placed. Pay cash or MoMo to the rider on delivery.', changedBy: v.userId },
-        });
+        if (online) {
+          // The online payment attempt is created after commit (it calls the provider); stock is held until paymentDueAt.
+          await tx.orderStatusHistory.create({
+            data: { orderId: order.id, toStatus: OrderStatus.PENDING_PAYMENT, note: `Order placed. Awaiting payment (${this.payments.ttlMinutes()} minutes to pay).`, changedBy: v.userId },
+          });
+        } else {
+          await tx.payment.create({
+            data: {
+              orderId: order.id, provider: PaymentProvider.CASH_ON_DELIVERY, method: PaymentMethod.CASH,
+              reference: `PAY-${order.orderNumber}-${randomBytes(3).toString('hex').toUpperCase()}`,
+              amount: totals.grandTotal, status: PaymentTxnStatus.PENDING, payerPhone: contactPhone,
+            },
+          });
+          await tx.orderStatusHistory.create({
+            data: { orderId: order.id, toStatus: OrderStatus.PROCESSING, note: 'Order placed. Pay cash or MoMo to the rider on delivery.', changedBy: v.userId },
+          });
+        }
         await tx.cart.update({ where: { id: cart.id }, data: { status: CartStatus.CONVERTED, couponId: null } });
         if (v.userId) {
-          await tx.customer.updateMany({ where: { userId: v.userId }, data: { orderCount: { increment: 1 }, lastOrderAt: new Date() } });
+          // Online orders are counted once payment is confirmed (PaymentsService.apply).
+          if (!online) await tx.customer.updateMany({ where: { userId: v.userId }, data: { orderCount: { increment: 1 }, lastOrderAt: new Date() } });
           if (dto.saveAddress && dto.address) await this.saveAddress(tx, v.userId, dto.address);
         }
         return order.id;
@@ -215,8 +232,18 @@ export class CheckoutService {
       throw e;
     }
 
+    // 5. Online: open the hosted checkout. If the provider is down, the order stays reserved and can be paid via "Pay now".
+    let nextAction: NextAction | null = null;
+    let paymentError: string | null = null;
+    if (online) {
+      try {
+        nextAction = await this.payments.start(orderId, dto.paymentMethod as OnlineProvider);
+      } catch (e) {
+        paymentError = (e as { response?: { message?: string } }).response?.message ?? 'We could not start the payment. Please try again.';
+      }
+    }
     const order = await this.prisma.order.findUniqueOrThrow({ where: { id: orderId }, include: orderInclude });
-    return presentOrder(order);
+    return { ...presentOrder(order), nextAction, paymentError };
   }
 
   private async findByKey(key: string, v: ViewerRef, email?: string | null) {
@@ -224,7 +251,9 @@ export class CheckoutService {
     if (!order) return null;
     const mine = v.userId ? order.userId === v.userId : !order.userId && !!email && order.guestEmail === email;
     if (!mine) throw new ConflictException({ message: 'This checkout session was already used. Please refresh and try again.', code: 'IDEMPOTENCY_CONFLICT' });
-    return presentOrder(order);
+    // A retried submit of an online order gets the same open payment page, never a second payment.
+    const nextAction = order.status === OrderStatus.PENDING_PAYMENT ? await this.payments.openAction(order.id) : null;
+    return { ...presentOrder(order), nextAction, paymentError: null };
   }
 
   private async resolveAddress(v: ViewerRef, dto: PlaceOrderDto): Promise<AddressInput & { countryCode: string }> {

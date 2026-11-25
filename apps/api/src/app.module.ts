@@ -20,6 +20,9 @@ import { AdminCatalogModule } from './modules/admin/admin-catalog.module';
 import { AdminOrdersModule } from './modules/admin/admin-orders.module';
 import { AdminInventoryModule } from './modules/admin/admin-inventory.module';
 import { AdminCustomersModule } from './modules/admin/admin-customers.module';
+import { OrderLifecycleModule } from './modules/orders/order-lifecycle.service';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { ReturnsModule } from './modules/returns/returns.module';
 import { JwtAuthGuard, PermissionsGuard } from './common/guards/auth.guards';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor';
@@ -43,6 +46,9 @@ import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor'
     CheckoutModule,
     CustomerModule,
     InventoryModule,
+    OrderLifecycleModule,
+    PaymentsModule,
+    ReturnsModule,
     UploadsModule,
     AdminDashboardModule,
     AdminCatalogModule,

@@ -143,6 +143,17 @@ export class InventoryService {
     });
   }
 
+  /** Returned goods in resellable condition go back on the shelf. */
+  async returnToStock(tx: Prisma.TransactionClient, r: { variantId: number; warehouseId: number; quantity: number; returnId: number; userId: number }) {
+    const inv = await this.lockOne(tx, r.variantId, r.warehouseId);
+    const next = inv.onHand + r.quantity;
+    await tx.inventory.update({ where: { id: inv.id }, data: { quantityOnHand: next } });
+    await tx.stockMovement.create({
+      data: { inventoryId: inv.id, type: StockMovementType.CUSTOMER_RETURN, quantity: r.quantity, balanceAfter: next,
+        referenceType: 'return', referenceId: r.returnId, userId: r.userId, note: 'Customer return restocked' },
+    });
+  }
+
   /** Moves stock out of / into a warehouse for an inter-warehouse transfer. */
   async transferLeg(tx: Prisma.TransactionClient, t: {
     variantId: number; warehouseId: number; quantity: number; direction: 'out' | 'in'; transferId: number; userId: number;

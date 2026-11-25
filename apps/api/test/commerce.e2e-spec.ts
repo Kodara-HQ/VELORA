@@ -58,7 +58,7 @@ describe('Storefront commerce (e2e)', () => {
 
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = configureApp(mod.createNestApplication());
+    app = configureApp(mod.createNestApplication({ rawBody: true }));
     await app.init();
     prisma = app.get(PrismaService);
   });

@@ -6,7 +6,7 @@ import { configureApp, setupSwagger } from './bootstrap';
 import type { Env } from './config/env';
 
 async function main() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: false });
+  const app = await NestFactory.create(AppModule, { bufferLogs: false, rawBody: true });
   configureApp(app);
   const config = app.get(ConfigService<Env, true>);
   if (config.get('NODE_ENV', { infer: true }) !== 'production') setupSwagger(app);
