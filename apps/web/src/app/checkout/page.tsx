@@ -13,7 +13,7 @@ import { cx } from '@/lib/cx';
 import { formatMoney } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { cartKey, errorMessage, useCart } from '@/lib/shop';
-import type { Address, Order, Quote, ShippingOption } from '@/lib/types';
+import type { Address, PaymentMethodOption, PlacedOrder, Quote, ShippingOption } from '@/lib/types';
 
 const KEY_STORE = 'velora_checkout_key';
 
@@ -51,6 +51,12 @@ export default function CheckoutPage() {
   const [saveAddress, setSaveAddress] = useState(true);
   const [methodId, setMethodId] = useState<number | null>(null);
   const [note, setNote] = useState('');
+  const [payMethod, setPayMethod] = useState('');
+  const payMethods = useQuery({ queryKey: ['payment-methods'], queryFn: () => api<PaymentMethodOption[]>('/checkout/payment-methods', { auth: false }), staleTime: 300_000 });
+  useEffect(() => {
+    if (payMethods.data?.length && !payMethods.data.some((m) => m.code === payMethod)) setPayMethod(payMethods.data[0].code);
+  }, [payMethods.data, payMethod]);
+  const chosen = payMethods.data?.find((m) => m.code === payMethod);
 
   const saved = useQuery({ queryKey: ['addresses', user?.id], queryFn: () => api<Address[]>('/me/addresses'), enabled: status === 'authenticated' });
   useEffect(() => {
@@ -83,14 +89,14 @@ export default function CheckoutPage() {
   });
 
   const place = useMutation({
-    mutationFn: () => api<Order>('/checkout/orders', {
+    mutationFn: () => api<PlacedOrder>('/checkout/orders', {
       method: 'POST',
       headers: { 'Idempotency-Key': idem.key },
       body: {
         ...(status !== 'authenticated' || contact.phone !== (user?.phone ?? '') ? { contact: { email: contact.email, phone: normalisePhone(contact.phone) } } : {}),
         ...(typeof addressId === 'number' ? { addressId } : { address: cleanAddress(address), ...(status === 'authenticated' && { saveAddress }) }),
         shippingMethodId: methodId,
-        paymentMethod: 'CASH_ON_DELIVERY',
+        paymentMethod: payMethod,
         ...(note.trim() && { note: note.trim() }),
         expectedTotal: quote.data?.grandTotal,
       },
@@ -100,7 +106,9 @@ export default function CheckoutPage() {
       try { sessionStorage.setItem('velora_last_order', JSON.stringify({ orderNumber: order.orderNumber, email: contact.email })); } catch { /* ignore */ }
       qc.setQueryData(['order', order.orderNumber], order);
       void qc.invalidateQueries({ queryKey: cartKey(user?.id ?? null) });
-      router.replace(`/order/${order.orderNumber}`);
+      // Online payment: hand over to the provider's hosted checkout (we never see card or MoMo PINs).
+      if (order.nextAction) window.location.assign(order.nextAction.url);
+      else router.replace(`/order/${order.orderNumber}${order.paymentError ? '?payError=1' : ''}`);
     },
     onError: (e) => {
       if (e instanceof ApiError && ['PRICE_CHANGED', 'COUPON_INVALID', 'CART_ISSUES', 'INSUFFICIENT_STOCK'].includes(e.code)) {
@@ -240,14 +248,25 @@ export default function CheckoutPage() {
           <Step n={4} title="Payment & review" active={step === 3} done={false}>
             <fieldset>
               <legend className="mb-3 text-xs font-semibold uppercase tracking-[0.12em]">Payment method</legend>
-              <label className="flex items-start gap-3 rounded-sm border border-ink bg-paper p-4 text-sm">
-                <input type="radio" name="pay" className="mt-1 accent-ink" checked readOnly />
-                <span>
-                  <span className="font-semibold">Pay on delivery</span>
-                  <span className="block text-muted">Pay the rider in cash or by MoMo (MTN, Telecel, AT) when your order arrives.</span>
-                </span>
-              </label>
-              <p className="mt-2 text-xs text-muted">Secure online card and Mobile Money payment is coming soon.</p>
+              {payMethods.isPending ? <Skeleton className="h-20" /> : payMethods.isError ? <Alert tone="danger">{errorMessage(payMethods.error)}</Alert> : (
+                <div className="space-y-3">
+                  {payMethods.data?.map((m) => (
+                    <label key={m.code} className={cx('flex cursor-pointer items-start gap-3 rounded-sm border p-4 text-sm', payMethod === m.code ? 'border-ink bg-paper' : 'border-line')}>
+                      <input type="radio" name="pay" className="mt-1 accent-ink" checked={payMethod === m.code} onChange={() => setPayMethod(m.code)} />
+                      <span className="flex-1">
+                        <span className="font-semibold">{m.label}</span>
+                        {m.code === 'SIMULATOR' && <span className="ml-2 rounded-sm bg-warning-soft px-1.5 py-0.5 text-[10px] font-bold uppercase text-warning">Dev only</span>}
+                        <span className="block text-muted">{m.detail}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {chosen?.online && (
+                <p className="mt-2 text-xs text-muted">
+                  You’ll be taken to a secure payment page to confirm. Your items are held for you while you pay.
+                </p>
+              )}
             </fieldset>
             <label className="mt-6 block text-xs font-semibold uppercase tracking-[0.12em]" htmlFor="note">Delivery note (optional)</label>
             <textarea id="note" value={note} onChange={(e) => setNote(e.target.value.slice(0, 500))} rows={2} placeholder="e.g. Call when you reach the gate"
@@ -262,8 +281,8 @@ export default function CheckoutPage() {
               </div>
             )}
             <Button size="lg" block className="mt-6" onClick={() => place.mutate()} loading={place.isPending}
-              disabled={!quote.data || quote.isFetching || !idem.key || cart.data?.hasIssues || (quote.data.coupon ? !quote.data.coupon.valid : false)}>
-              {quote.data ? `Place order · ${formatMoney(quote.data.grandTotal)}` : 'Calculating total…'}
+              disabled={!quote.data || !payMethod || quote.isFetching || !idem.key || cart.data?.hasIssues || (quote.data.coupon ? !quote.data.coupon.valid : false)}>
+              {quote.data ? `${chosen?.online ? 'Pay' : 'Place order'} · ${formatMoney(quote.data.grandTotal)}` : 'Calculating total…'}
             </Button>
             <p className="mt-3 text-center text-xs text-muted">By placing your order you agree to VÉLORA’s terms of sale and 14-day returns policy.</p>
           </Step>

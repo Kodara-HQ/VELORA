@@ -86,7 +86,25 @@ A fashion, beauty and lifestyle marketplace for Ghana, built to grow internation
 - **Staff:** create staff accounts, assign roles, suspend accounts, and browse the audit log.
 - 62 end-to-end API tests.
 
-Online payments (Paystack and Hubtel, covering Mobile Money and cards, with webhook verification) are Phase 4. The remaining phases are listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+**Phase 4: Payments, delivery and returns** is complete.
+
+- **Online payments:** Paystack (cards, MTN MoMo, Telecel Cash, AT Money) and Hubtel. Each is offered at checkout only when its keys are set in `apps/api/.env`.
+- **Payment confirmation:** an order is marked paid only after a server-side check. Paystack confirms through an HMAC-SHA512-signed webhook or its verify API; Hubtel through its status API. Amount and currency must match, each payment is applied exactly once, and webhook events are de-duplicated.
+- **Unpaid orders:** stock is held for `PAYMENT_TTL_MINUTES`, and the shopper can retry a failed payment. A background job re-checks the provider, then cancels the order and releases its stock. A payment that arrives after cancellation automatically becomes a refund request.
+- **Returns and exchanges:** customers request them within the return window. Staff approve, then receive items (resellable items are restocked). Settlement is either a refund for exactly what was paid, or a free replacement order for an exchange.
+- **Refunds:** Finance refunds through the original provider or records a manual MoMo or bank payout. Order totals, the vendor commission and loyalty points are adjusted to match.
+- **Admin screens:** a payments ledger, the provider webhook log, a returns queue and a refunds queue.
+- **Development simulator:** with `PAYMENT_SIMULATOR=true` (development only; the API refuses to start with it in production), a test checkout runs the whole online-payment flow without keys.
+- 70 end-to-end API tests.
+
+**Going live with Paystack:**
+1. Set `PAYSTACK_SECRET_KEY` (`sk_live_…`).
+2. In the Paystack dashboard, set the webhook URL to `<API_PUBLIC_URL>/api/v1/payments/webhooks/paystack`.
+3. Set `PAYMENT_SIMULATOR=false`.
+
+**Going live with Hubtel:**
+1. Set `HUBTEL_CLIENT_ID`, `HUBTEL_CLIENT_SECRET` and `HUBTEL_MERCHANT_ACCOUNT`.
+2. Make sure `API_PUBLIC_URL` is reachable from the internet so Hubtel's callback can arrive. The remaining phases are listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Running locally
 

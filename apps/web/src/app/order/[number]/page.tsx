@@ -38,11 +38,21 @@ export default function OrderConfirmationPage() {
   return (
     <Container className="py-10">
       <div className="mx-auto mb-10 max-w-2xl text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-deep">Medaase · Thank you</p>
-        <h1 className="mt-3 text-3xl font-extrabold sm:text-4xl">Your order is confirmed</h1>
-        <p className="mt-3 text-muted">
-          Order <b className="text-ink">{number}</b>. We’ll text and email you when it’s on its way.
-        </p>
+        {q.data?.status === 'PENDING_PAYMENT' ? (
+          <>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-deep">Almost there</p>
+            <h1 className="mt-3 text-3xl font-extrabold sm:text-4xl">Complete your payment</h1>
+            <p className="mt-3 text-muted">Order <b className="text-ink">{number}</b> is reserved for you. It’s confirmed as soon as payment goes through.</p>
+          </>
+        ) : q.data?.status === 'CANCELLED' ? (
+          <h1 className="mt-3 text-3xl font-extrabold sm:text-4xl">Order {number} was cancelled</h1>
+        ) : (
+          <>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-deep">Medaase · Thank you</p>
+            <h1 className="mt-3 text-3xl font-extrabold sm:text-4xl">Your order is confirmed</h1>
+            <p className="mt-3 text-muted">Order <b className="text-ink">{number}</b>. We’ll text and email you when it’s on its way.</p>
+          </>
+        )}
       </div>
       {needsLookup ? (
         <div className="mx-auto max-w-md text-center">
@@ -55,7 +65,7 @@ export default function OrderConfirmationPage() {
         <Alert tone="danger">{errorMessage(q.error)}</Alert>
       ) : (
         <>
-          <OrderView order={q.data} />
+          <OrderView order={q.data} guestEmail={guestEmail} />
           <div className="mt-10 flex flex-wrap justify-center gap-3">
             <ButtonLink href="/shop?sort=newest">Continue shopping</ButtonLink>
             {status === 'authenticated' && <ButtonLink href="/account/orders" variant="secondary">View my orders</ButtonLink>}

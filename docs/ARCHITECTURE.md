@@ -36,7 +36,7 @@ Admin / Vendor portal ───────────────┘         �
 1. **Foundation** ✅
 2. **Customer website** ✅
 3. **Administration** ✅
-4. **Payments and delivery:** Paystack and Hubtel (MoMo and cards) with verified webhooks, shipping, tracking, returns and refunds
+4. **Payments, delivery and returns** ✅
 5. **Marketplace:** vendor onboarding, vendor portal, commissions, settlements
 6. **Advanced:** recommendations, loyalty, promotions and flash sales, Meilisearch, notifications, analytics
 7. **Mobile:** Expo app for Android and iOS with push notifications

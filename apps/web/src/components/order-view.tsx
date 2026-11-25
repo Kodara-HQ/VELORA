@@ -4,7 +4,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { cx } from '@/lib/cx';
-import { ORDER_STATUS_LABEL, type Order, type OrderStatus } from '@/lib/types';
+import { ORDER_STATUS_LABEL, RETURN_STATUS_LABEL, type Order, type OrderStatus } from '@/lib/types';
+import { PayNow } from './pay-now';
 import { AddressText } from './address-form';
 import { Row } from './shop-overlays';
 import { Badge } from './ui';
@@ -19,9 +20,14 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
 
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 
-export function OrderView({ order, actions }: { order: Order; actions?: React.ReactNode }) {
+const REFUND_LABEL: Record<string, string> = { REQUESTED: 'Being reviewed', APPROVED: 'Approved', PROCESSING: 'On its way to you', COMPLETED: 'Refunded', REJECTED: 'Declined', FAILED: 'Failed' };
+const PAY_METHOD: Record<string, string> = { CARD: 'card', MOMO_MTN: 'MTN MoMo', MOMO_TELECEL: 'Telecel Cash', MOMO_AT: 'AT Money', BANK_TRANSFER: 'bank transfer', ONLINE: 'online payment' };
+
+export function OrderView({ order, actions, guestEmail }: { order: Order; actions?: React.ReactNode; guestEmail?: string | null }) {
   const cancelled = order.status === 'CANCELLED';
-  const reached = order.status === 'DELIVERED' || order.status === 'COMPLETED' ? 3 : order.status === 'SHIPPED' || order.status === 'PARTIALLY_SHIPPED' ? 2 : 1;
+  const awaiting = order.status === 'PENDING_PAYMENT';
+  const reached = order.status === 'DELIVERED' || order.status === 'COMPLETED' || order.status.includes('REFUNDED') ? 3
+    : order.status === 'SHIPPED' || order.status === 'PARTIALLY_SHIPPED' ? 2 : awaiting ? 0 : 1;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
@@ -31,7 +37,7 @@ export function OrderView({ order, actions }: { order: Order; actions?: React.Re
             <div>
               <p className="text-xs text-muted">Order {order.orderNumber} · {formatDateTime(order.placedAt)}</p>
               <h2 className="mt-1 font-display text-xl font-bold">
-                {cancelled ? 'This order was cancelled' : order.estimatedDelivery ? `Arriving ${fmtDay(order.estimatedDelivery.from)}${order.estimatedDelivery.from.slice(0, 10) !== order.estimatedDelivery.to.slice(0, 10) ? ` – ${fmtDay(order.estimatedDelivery.to)}` : ''}` : ORDER_STATUS_LABEL[order.status]}
+                {cancelled ? 'This order was cancelled' : awaiting ? 'Awaiting payment' : order.estimatedDelivery ? `Arriving ${fmtDay(order.estimatedDelivery.from)}${order.estimatedDelivery.from.slice(0, 10) !== order.estimatedDelivery.to.slice(0, 10) ? ` – ${fmtDay(order.estimatedDelivery.to)}` : ''}` : ORDER_STATUS_LABEL[order.status]}
               </h2>
             </div>
             <StatusBadge status={order.status} />
@@ -47,6 +53,7 @@ export function OrderView({ order, actions }: { order: Order; actions?: React.Re
             </ol>
           )}
           {cancelled && order.cancelReason && <p className="mt-3 text-sm text-muted">Reason: {order.cancelReason}</p>}
+          {order.canPay && <div className="mt-6"><PayNow orderNumber={order.orderNumber} deadline={order.paymentDueAt} email={guestEmail} /></div>}
           {actions && <div className="mt-6 flex flex-wrap gap-3">{actions}</div>}
         </section>
 
@@ -99,11 +106,35 @@ export function OrderView({ order, actions }: { order: Order; actions?: React.Re
           {order.payment && (
             <p className="mt-4 rounded-sm bg-sand px-3 py-2 text-xs">
               {order.payment.method === 'CASH'
-                ? order.status === 'CANCELLED' ? 'Pay on delivery · nothing to pay' : `Pay on delivery · ${formatMoney(order.grandTotal)} due to the rider (cash or MoMo)`
-                : `Paid by ${order.payment.method.replace('_', ' ').toLowerCase()} · ${order.payment.status.toLowerCase()}`}
+                ? order.status === 'CANCELLED' ? 'Pay on delivery · nothing to pay'
+                  : order.paymentStatus === 'PAID' ? `Paid on delivery · ${formatMoney(order.grandTotal)}` : `Pay on delivery · ${formatMoney(order.grandTotal)} due to the rider (cash or MoMo)`
+                : order.payment.status === 'SUCCESS' ? `Paid by ${PAY_METHOD[order.payment.method] ?? 'online payment'}`
+                : awaiting ? 'Awaiting online payment' : 'Online payment not completed'}
             </p>
           )}
+          {order.refunds.length > 0 && (
+            <ul className="mt-3 space-y-1.5 text-xs">
+              {order.refunds.map((r, i) => (
+                <li key={i} className="flex justify-between gap-2 rounded-sm bg-success-soft px-3 py-2 text-success">
+                  <span>Refund · {REFUND_LABEL[r.status] ?? r.status}</span><b>{formatMoney(r.amount)}</b>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
+        {order.returns.length > 0 && (
+          <section className="rounded-sm border border-line bg-paper p-6">
+            <h2 className="font-display text-lg font-bold">Returns</h2>
+            <ul className="mt-3 space-y-2 text-sm">
+              {order.returns.map((r) => (
+                <li key={r.returnNumber} className="flex justify-between gap-2">
+                  <span>{r.type === 'EXCHANGE' ? 'Exchange' : 'Return'} <span className="font-mono text-xs">{r.returnNumber}</span></span>
+                  <span className="text-muted">{RETURN_STATUS_LABEL[r.status] ?? r.status}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <section className="rounded-sm border border-line bg-paper p-6">
           <h2 className="font-display text-lg font-bold">Delivery</h2>
           <div className="mt-3"><AddressText a={order.shippingAddress as never} /></div>

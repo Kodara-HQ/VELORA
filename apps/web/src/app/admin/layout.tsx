@@ -20,6 +20,11 @@ const ADMIN_NAV: Array<{ section: string; items: Array<{ href: string; label: st
   { section: 'Sales', items: [
     { href: '/admin/orders', label: 'Orders', perm: P.ORDERS_VIEW },
     { href: '/admin/customers', label: 'Customers', perm: P.CUSTOMERS_VIEW },
+    { href: '/admin/returns', label: 'Returns', perm: P.RETURNS_VIEW },
+  ] },
+  { section: 'Finance', items: [
+    { href: '/admin/refunds', label: 'Refunds', perm: P.REFUNDS_PROCESS },
+    { href: '/admin/payments', label: 'Payments', perm: P.PAYMENTS_VIEW },
   ] },
   { section: 'Catalogue', items: [
     { href: '/admin/products', label: 'Products', perm: P.PRODUCTS_VIEW },

@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { Dialog } from '@/components/dialog';
 import { OrderView } from '@/components/order-view';
+import { ReturnRequestDialog } from '@/components/return-request';
 import { Alert, Button, Skeleton } from '@/components/ui';
 import { api } from '@/lib/api';
 import { errorMessage } from '@/lib/shop';
@@ -19,6 +20,8 @@ export default function OrderDetailPage() {
   const q = useQuery({ queryKey: ['order', number], queryFn: () => api<Order>(`/me/orders/${number}`) });
   const [confirm, setConfirm] = useState(false);
   const [reason, setReason] = useState(REASONS[0]);
+  const [returning, setReturning] = useState(false);
+  const [requested, setRequested] = useState<string | null>(null);
   const cancel = useMutation({
     mutationFn: () => api<Order>(`/me/orders/${number}/cancel`, { method: 'POST', body: { reason } }),
     onSuccess: (o) => {
@@ -33,10 +36,15 @@ export default function OrderDetailPage() {
       <Link href="/account/orders" className="mb-5 inline-block text-sm font-semibold underline underline-offset-4">← All orders</Link>
       {q.isPending ? <Skeleton className="h-96" /> : q.isError ? <Alert tone="danger">{errorMessage(q.error)}</Alert> : (
         <>
-          {cancel.isSuccess && <div className="mb-4"><Alert tone="success">Your order has been cancelled. Any reserved items have been released.</Alert></div>}
-          <OrderView order={q.data} actions={q.data.canCancel && <Button variant="danger" size="sm" onClick={() => setConfirm(true)}>Cancel order</Button>} />
+          {cancel.isSuccess && <div className="mb-4"><Alert tone="success">Your order has been cancelled. Any reserved items have been released{q.data.refunds.length ? ', and your refund has been requested' : ''}.</Alert></div>}
+          {requested && <div className="mb-4"><Alert tone="success" title={`Request ${requested} received`}>We’ll review it within one working day and email you the next steps.</Alert></div>}
+          <OrderView order={q.data} actions={<>
+            {q.data.canCancel && <Button variant="danger" size="sm" onClick={() => setConfirm(true)}>Cancel order</Button>}
+            {['DELIVERED', 'COMPLETED', 'PARTIALLY_REFUNDED'].includes(q.data.status) && <Button variant="secondary" size="sm" onClick={() => setReturning(true)}>Return or exchange</Button>}
+          </>} />
         </>
       )}
+      {returning && <ReturnRequestDialog orderNumber={number} onClose={() => setReturning(false)} onDone={(r) => { setReturning(false); setRequested(r.returnNumber); }} />}
       <Dialog open={confirm} onClose={() => setConfirm(false)} label="Cancel order" className="max-w-md">
         <div className="p-6 sm:p-8">
           <h2 className="text-xl font-extrabold">Cancel order {number}?</h2>

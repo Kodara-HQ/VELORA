@@ -191,7 +191,35 @@ export interface Order {
   shipments: Array<{ carrier: string; trackingNumber: string | null; status: string; events: Array<{ status: string; description: string; location: string | null; occurredAt: string }> }>;
   canCancel: boolean;
   cancelReason: string | null;
+  paymentDueAt: string | null;
+  canPay: boolean;
+  refunds: Array<{ amount: string; status: string; reason: string; createdAt: string; processedAt: string | null }>;
+  returns: Array<{ returnNumber: string; type: 'RETURN' | 'EXCHANGE'; status: string; createdAt: string }>;
+  deliveredAt: string | null;
 }
+
+export interface NextAction { type: 'redirect'; url: string; reference: string; provider: string }
+export interface PlacedOrder extends Order { nextAction: NextAction | null; paymentError: string | null }
+export interface PaymentMethodOption { code: string; label: string; detail: string; online: boolean }
+
+export interface ReturnRequest {
+  returnNumber: string; type: 'RETURN' | 'EXCHANGE'; status: string; reason: string; customerNote: string | null; adminNote: string | null;
+  createdAt: string; approvedAt: string | null; receivedAt: string | null; closedAt: string | null; refundAmount: string | null;
+  order: { orderNumber: string };
+  items: Array<{ id: number; quantity: number; condition: string | null; restock: boolean; name: string; variantLabel: string | null; sku: string; image: string | null; unitPaid: string; exchangeFor: { sku: string; label: string } | null }>;
+  refunds: Array<{ id: number; amount: string; status: string; method: string | null; providerReference: string | null; processedAt: string | null }>;
+  customer?: string | null;
+}
+
+export const RETURN_REASONS: Record<string, string> = {
+  WRONG_SIZE: 'Wrong size', NOT_AS_DESCRIBED: 'Not as described', DAMAGED: 'Arrived damaged', DEFECTIVE: 'Faulty',
+  WRONG_ITEM: 'Wrong item sent', CHANGED_MIND: 'Changed my mind', LATE_DELIVERY: 'Arrived too late', OTHER: 'Other',
+};
+
+export const RETURN_STATUS_LABEL: Record<string, string> = {
+  REQUESTED: 'Requested', APPROVED: 'Approved: send it back', REJECTED: 'Declined', ITEMS_RECEIVED: 'Received: refund in progress',
+  REFUNDED: 'Refunded', EXCHANGED: 'Exchange sent', CLOSED: 'Closed',
+};
 
 export interface OrderSummary {
   orderNumber: string;

@@ -10,6 +10,7 @@ import { useCan, useSession } from '@/lib/session';
 const NAV = [
   { href: '/account', label: 'Overview' },
   { href: '/account/orders', label: 'Orders' },
+  { href: '/account/returns', label: 'Returns' },
   { href: '/account/wishlist', label: 'Wishlist' },
   { href: '/account/addresses', label: 'Addresses' },
 ];
