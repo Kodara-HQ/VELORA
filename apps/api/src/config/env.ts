@@ -94,6 +94,14 @@ export class Env {
 
   @IsString() @Matches(/^[A-Za-z0-9 ]{1,11}$/, { message: 'SMS_SENDER_ID must be 1–11 letters or digits' })
   SMS_SENDER_ID = 'VELORA';
+
+  /** "log" writes push notifications to the API log; "expo" sends through the Expo push service. */
+  @IsIn(['log', 'expo'])
+  PUSH_DRIVER: 'log' | 'expo' = 'log';
+
+  /** Optional: required only if "Enhanced push security" is enabled for the Expo project. */
+  @Transform(blankToUndef) @IsOptional() @IsString()
+  EXPO_ACCESS_TOKEN?: string;
 }
 
 export function validateEnv(raw: Record<string, unknown>): Env {

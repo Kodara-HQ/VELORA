@@ -9,7 +9,7 @@ A fashion, beauty and lifestyle marketplace for Ghana, built to grow internation
 | Backend API | `apps/api` | NestJS 11, TypeScript, Prisma 6, MySQL 8 / MariaDB 10.4+ |
 | Customer website | `apps/web` | Next.js 15 (App Router), Tailwind CSS 4, TanStack Query, Zustand |
 | Shared types and permissions | `packages/shared` | TypeScript |
-| Mobile app | `apps/mobile` | React Native and Expo (Phase 7) |
+| Mobile app | `apps/mobile` | Expo SDK 54, React Native 0.81, Expo Router, TanStack Query, Zustand |
 
 ## Status
 
@@ -158,6 +158,19 @@ A fashion, beauty and lifestyle marketplace for Ghana, built to grow internation
 - 88 end-to-end API tests.
 
 Demo data includes a live "Weekend Flash Sale" and a scheduled "Kente Week" (dates are relative to when the seed runs; run `npx prisma db seed` again to restart an expired demo sale).
+
+**Phase 7: Mobile** is complete. The Expo app for Android and iOS is in `apps/mobile`; its [README](apps/mobile/README.md) covers setup, development builds and push credentials.
+
+- **Shopping:** home with the live flash sale, departments, search with suggestions and typo correction, category and sale pages, product pages, wishlist, and the bag (guest bags carry over at sign-in).
+- **Checkout:** saved or new addresses, delivery options, promo codes, points, cash or MoMo on delivery, and online payment on the provider's secure page. Orders placed in the app are recorded with the `mobile` channel.
+- **Account:** order tracking, cancelling and paying, rewards with referral sharing, notifications, and email, SMS and app preferences.
+- **Sessions:** the refresh token is kept in the device keychain, rotated on every use, and revoked at sign-out.
+- **Push notifications:**
+  - The app registers its Expo push token at `/me/push-tokens`.
+  - Every in-app notification, including order updates, is also queued as a push in the same message outbox as email and SMS. Customers can turn push off per message type.
+  - The token moves to whoever last signed in on that device and is removed at sign-out. Tokens Expo reports as dead are deleted.
+  - Set `PUSH_DRIVER=expo` to send for real.
+- 90 end-to-end API tests.
 
 The remaining phases are listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

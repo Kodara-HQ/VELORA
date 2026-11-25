@@ -9,7 +9,7 @@ import { api } from '@/lib/api';
 import { cx } from '@/lib/cx';
 import { errorMessage } from '@/lib/shop';
 
-interface Prefs { email: { orders: boolean; marketing: boolean }; sms: { orders: boolean; marketing: boolean } }
+interface Prefs { email: { orders: boolean; marketing: boolean }; sms: { orders: boolean; marketing: boolean }; push: { orders: boolean; marketing: boolean } }
 
 export default function NotificationsPage() {
   const list = useQuery({ queryKey: ['notifications', 'account'], queryFn: () => api<AppNotification[]>('/me/notifications?pageSize=30') });
@@ -51,7 +51,7 @@ function Preferences() {
   useEffect(() => { if (q.data) setP(q.data); }, [q.data]);
   const save = useMutation({ mutationFn: (body: Prefs) => api<Prefs>('/me/notification-preferences', { method: 'PUT', body }), onSuccess: (d) => qc.setQueryData(['notification-prefs'], d) });
   if (!p) return <Skeleton className="h-40" />;
-  const toggle = (ch: 'email' | 'sms', k: 'orders' | 'marketing') => {
+  const toggle = (ch: 'email' | 'sms' | 'push', k: 'orders' | 'marketing') => {
     const next = { ...p, [ch]: { ...p[ch], [k]: !p[ch][k] } };
     setP(next);
     save.mutate(next);
@@ -65,15 +65,15 @@ function Preferences() {
       <h2 className="mb-1 text-lg font-extrabold">How we contact you</h2>
       <p className="mb-4 text-sm text-muted">In-app notifications are always on. Choose what else you’d like to receive.</p>
       {save.isError && <div className="mb-3"><Alert tone="danger">{errorMessage(save.error)}</Alert></div>}
-      <table className="w-full max-w-xl text-sm">
-        <thead><tr className="text-left text-[11px] uppercase tracking-[0.1em] text-muted"><th className="py-2 font-semibold">Message</th><th className="w-20 py-2 text-center font-semibold">Email</th><th className="w-20 py-2 text-center font-semibold">SMS</th></tr></thead>
+      <table className="w-full max-w-2xl text-sm">
+        <thead><tr className="text-left text-[11px] uppercase tracking-[0.1em] text-muted"><th className="py-2 font-semibold">Message</th><th className="w-20 py-2 text-center font-semibold">Email</th><th className="w-20 py-2 text-center font-semibold">SMS</th><th className="w-20 py-2 text-center font-semibold">App</th></tr></thead>
         <tbody className="divide-y divide-line border-t border-line">
           {rows.map(([k, label, hint]) => (
             <tr key={k}>
               <td className="py-3"><span className="font-medium">{label}</span><span className="block text-xs text-muted">{hint}</span></td>
-              {(['email', 'sms'] as const).map((ch) => (
+              {(['email', 'sms', 'push'] as const).map((ch) => (
                 <td key={ch} className="text-center">
-                  <input type="checkbox" className="h-4 w-4 accent-ink" checked={p[ch][k]} onChange={() => toggle(ch, k)} aria-label={`${label} by ${ch === 'sms' ? 'SMS' : 'email'}`} />
+                  <input type="checkbox" className="h-4 w-4 accent-ink" checked={p[ch][k]} onChange={() => toggle(ch, k)} aria-label={`${label} by ${ch === 'sms' ? 'SMS' : ch === 'push' ? 'app notification' : 'email'}`} />
                 </td>
               ))}
             </tr>

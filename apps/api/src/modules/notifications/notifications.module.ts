@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Global, HttpCode, Injectabl
 import { ApiBearerAuth, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { LoyaltyTier, NotificationChannel, OutboxStatus, Prisma } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsIn, IsOptional, IsString, MaxLength, MinLength, ValidateNested } from 'class-validator';
+import { IsBoolean, IsEnum, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import type { Request } from 'express';
 import { PERMISSIONS, type AuthUser } from '@velora/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -27,7 +27,10 @@ export interface NotifyInput {
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly messaging: MessagingService,
+  ) {}
 
   async notify(userIds: number | number[], n: NotifyInput, tx: Prisma.TransactionClient = this.prisma) {
     const ids = [...new Set(Array.isArray(userIds) ? userIds : [userIds])];
@@ -36,6 +39,8 @@ export class NotificationsService {
       await tx.notification.createMany({
         data: ids.map((userId) => ({ userId, channel: NotificationChannel.IN_APP, type: n.type, title: n.title.slice(0, 200), body: n.body, data: n.data, sentAt: new Date() })),
       });
+      const href = (n.data as { href?: string } | undefined)?.href;
+      await this.messaging.queuePush(tx, ids, { type: n.type, title: n.title.slice(0, 200), body: n.body, href });
     } catch (e) {
       if (tx !== this.prisma) throw e;
       this.logger.error(`Failed to store notification ${n.type}`, e as Error); // never break the business action
@@ -98,11 +103,17 @@ class ChannelPrefs {
 class PrefsDto {
   @ApiProperty({ type: ChannelPrefs }) @ValidateNested() @Type(() => ChannelPrefs) email: ChannelPrefs;
   @ApiProperty({ type: ChannelPrefs }) @ValidateNested() @Type(() => ChannelPrefs) sms: ChannelPrefs;
+  @ApiPropertyOptional({ type: ChannelPrefs }) @IsOptional() @ValidateNested() @Type(() => ChannelPrefs) push?: ChannelPrefs;
+}
+
+class PushTokenDto {
+  @ApiProperty({ example: 'ExponentPushToken[xxxxxxxx]' }) @Matches(/^Expo(nent)?PushToken\[[A-Za-z0-9_-]{10,200}\]$/, { message: 'Not an Expo push token' }) token: string;
+  @ApiProperty({ enum: ['ios', 'android'] }) @IsIn(['ios', 'android']) platform: 'ios' | 'android';
 }
 
 class OutboxQuery extends PaginationQuery {
   @ApiPropertyOptional({ enum: OutboxStatus }) @IsOptional() @IsEnum(OutboxStatus) status?: OutboxStatus;
-  @ApiPropertyOptional({ enum: ['EMAIL', 'SMS'] }) @IsOptional() @IsIn(['EMAIL', 'SMS']) channel?: 'EMAIL' | 'SMS';
+  @ApiPropertyOptional({ enum: ['EMAIL', 'SMS', 'PUSH'] }) @IsOptional() @IsIn(['EMAIL', 'SMS', 'PUSH']) channel?: 'EMAIL' | 'SMS' | 'PUSH';
 }
 
 class BroadcastDto {
@@ -131,13 +142,32 @@ export class MessagingController {
 
   @Put('me/notification-preferences')
   async setPrefs(@CurrentUser() u: AuthUser, @Body() dto: PrefsDto) {
-    const prefs = { email: { orders: dto.email.orders, marketing: dto.email.marketing }, sms: { orders: dto.sms.orders, marketing: dto.sms.marketing } };
+    const current = readPrefs((await this.prisma.customer.findUnique({ where: { userId: u.id } }))?.notificationPrefs);
+    const prefs = { email: { orders: dto.email.orders, marketing: dto.email.marketing }, sms: { orders: dto.sms.orders, marketing: dto.sms.marketing }, push: dto.push ? { orders: dto.push.orders, marketing: dto.push.marketing } : current.push };
     await this.prisma.customer.upsert({
       where: { userId: u.id },
       create: { userId: u.id, notificationPrefs: prefs, marketingOptIn: prefs.email.marketing || prefs.sms.marketing },
       update: { notificationPrefs: prefs, marketingOptIn: prefs.email.marketing || prefs.sms.marketing },
     });
     return prefs;
+  }
+
+  /** The app registers its Expo push token after sign-in. A token moves to whoever signed in on that device last. */
+  @Post('me/push-tokens') @HttpCode(200)
+  async registerPush(@CurrentUser() u: AuthUser, @Body() dto: PushTokenDto) {
+    await this.prisma.pushToken.upsert({
+      where: { token: dto.token },
+      create: { token: dto.token, platform: dto.platform, userId: u.id },
+      update: { userId: u.id, platform: dto.platform, lastSeen: new Date() },
+    });
+    return { registered: true };
+  }
+
+  /** Called on sign-out so a shared phone stops getting the previous user's notifications. */
+  @Post('me/push-tokens/remove') @HttpCode(200)
+  async removePush(@CurrentUser() u: AuthUser, @Body() dto: PushTokenDto) {
+    const r = await this.prisma.pushToken.deleteMany({ where: { token: dto.token, userId: u.id } });
+    return { removed: r.count };
   }
 
   @Get('admin/messages') @RequirePermissions(PERMISSIONS.NOTIFICATIONS_SEND)

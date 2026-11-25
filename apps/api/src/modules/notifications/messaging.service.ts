@@ -10,12 +10,12 @@ type Tx = Prisma.TransactionClient;
 export type OrderEvent = 'placed' | 'paid' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
 
 /** What a customer has chosen to receive. Order updates default on; marketing defaults to their sign-up choice. */
-export interface NotificationPrefs { email: { orders: boolean; marketing: boolean }; sms: { orders: boolean; marketing: boolean } }
-export const defaultPrefs = (marketing = false): NotificationPrefs => ({ email: { orders: true, marketing }, sms: { orders: true, marketing: false } });
+export interface NotificationPrefs { email: { orders: boolean; marketing: boolean }; sms: { orders: boolean; marketing: boolean }; push: { orders: boolean; marketing: boolean } }
+export const defaultPrefs = (marketing = false): NotificationPrefs => ({ email: { orders: true, marketing }, sms: { orders: true, marketing: false }, push: { orders: true, marketing } });
 export function readPrefs(raw: unknown, marketing = false): NotificationPrefs {
   const d = defaultPrefs(marketing);
   const r = (raw ?? {}) as Partial<NotificationPrefs>;
-  return { email: { ...d.email, ...r.email }, sms: { ...d.sms, ...r.sms } };
+  return { email: { ...d.email, ...r.email }, sms: { ...d.sms, ...r.sms }, push: { ...d.push, ...r.push } };
 }
 
 const MAX_ATTEMPTS = 5;
@@ -50,8 +50,25 @@ export class MessagingService implements OnApplicationBootstrap, OnModuleDestroy
 
   private get web() { return this.config.get<string>('WEB_APP_URL') ?? 'http://localhost:3000'; }
 
-  async queue(tx: Tx, m: { channel: 'EMAIL' | 'SMS'; recipient: string; userId?: number | null; template: string; subject?: string; body: string }) {
+  async queue(tx: Tx, m: { channel: 'EMAIL' | 'SMS' | 'PUSH'; recipient: string; userId?: number | null; template: string; subject?: string; body: string }) {
     await tx.messageOutbox.create({ data: { ...m, channel: m.channel as NotificationChannel, subject: m.subject?.slice(0, 200), userId: m.userId ?? null } });
+  }
+
+  /**
+   * Push to every app install of these users (if they allow it). The payload carries the in-app link,
+   * so tapping the notification opens the same screen as the bell would.
+   */
+  async queuePush(tx: Tx, userIds: number[], n: { type: string; title: string; body: string; href?: string }, kind: 'orders' | 'marketing' = 'orders') {
+    if (!userIds.length) return;
+    const tokens = await tx.pushToken.findMany({
+      where: { userId: { in: userIds } },
+      select: { token: true, userId: true, user: { select: { customer: { select: { notificationPrefs: true, marketingOptIn: true } } } } },
+    });
+    for (const t of tokens) {
+      const prefs = readPrefs(t.user.customer?.notificationPrefs, t.user.customer?.marketingOptIn);
+      if (!prefs.push[kind]) continue;
+      await this.queue(tx, { channel: 'PUSH', recipient: t.token, userId: t.userId, template: n.type, subject: n.title, body: JSON.stringify({ body: n.body, href: n.href ?? null }) });
+    }
   }
 
   /** Order updates by email and SMS (per the customer's preferences) plus the in-app bell for account holders. */
@@ -88,6 +105,7 @@ export class MessagingService implements OnApplicationBootstrap, OnModuleDestroy
     if (o.userId) {
       const n: NotifyInput = { type: `order.${event}`, title: c.subject, body: c.line, data: { href: `/account/orders/${o.orderNumber}` } };
       await tx.notification.create({ data: { userId: o.userId, channel: NotificationChannel.IN_APP, type: n.type, title: n.title, body: n.body, data: n.data, sentAt: new Date() } });
+      await this.queuePush(tx, [o.userId], { type: n.type, title: c.subject, body: c.line, href: `/account/orders/${o.orderNumber}` });
     }
   }
 
@@ -116,6 +134,7 @@ ${cta && href ? `<a href="${esc(href)}" style="display:inline-block;background:#
         if (claimed.count !== 1) continue;
         try {
           if (m.channel === NotificationChannel.EMAIL) await this.sendEmail(m.recipient, m.subject ?? 'VÉLORA', m.body);
+          else if (m.channel === NotificationChannel.PUSH) await this.sendPush(m.recipient, m.subject ?? 'VÉLORA', m.body);
           else await this.sendSms(m.recipient, m.body);
           await this.prisma.messageOutbox.update({ where: { id: m.id }, data: { status: OutboxStatus.SENT, sentAt: new Date(), lastError: null } });
           sent++;
@@ -141,6 +160,28 @@ ${cta && href ? `<a href="${esc(href)}" style="display:inline-block;background:#
       return;
     }
     await this.mailer.sendMail({ from: this.config.get<string>('MAIL_FROM'), to, subject, html });
+  }
+
+  /** Expo push service (works for both FCM and APNs). Tokens the device no longer has are removed. */
+  private async sendPush(token: string, title: string, payload: string) {
+    const { body, href } = JSON.parse(payload) as { body: string; href: string | null };
+    if (this.config.get('PUSH_DRIVER') !== 'expo') {
+      this.logger.log(`[push:log] to=${token.slice(0, 24)}… "${title}"`);
+      return;
+    }
+    const accessToken = this.config.get<string>('EXPO_ACCESS_TOKEN');
+    const r = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...(accessToken && { Authorization: `Bearer ${accessToken}` }) },
+      body: JSON.stringify({ to: token, title, body, sound: 'default', data: { href } }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const res = (await r.json().catch(() => null)) as { data?: { status: string; message?: string; details?: { error?: string } } } | null;
+    if (res?.data?.details?.error === 'DeviceNotRegistered') {
+      await this.prisma.pushToken.deleteMany({ where: { token } });
+      return; // nothing to retry: the app was uninstalled or the token rotated
+    }
+    if (!r.ok || res?.data?.status === 'error') throw new Error(`Expo push ${r.status}: ${res?.data?.message ?? 'failed'}`);
   }
 
   private async sendSms(to: string, content: string) {

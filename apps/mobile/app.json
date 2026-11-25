@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "VÉLORA",
+    "slug": "velora",
+    "scheme": "velora",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F8F7F4",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "com.velora.shop",
+      "supportsTablet": true,
+      "infoPlist": { "ITSAppUsesNonExemptEncryption": false }
+    },
+    "android": {
+      "package": "com.velora.shop",
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": { "backgroundColor": "#111111" }
+    },
+    "web": { "bundler": "metro", "output": "single" },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-notifications", { "color": "#D9A0A7" }]
+    ],
+    "experiments": { "typedRoutes": false, "tsconfigPaths": true },
+    "extra": {
+      "router": {},
+      "eas": { "projectId": "" }
+    }
+  }
+}

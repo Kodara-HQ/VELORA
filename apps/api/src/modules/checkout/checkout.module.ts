@@ -87,7 +87,7 @@ export class CheckoutService {
     };
   }
 
-  async placeOrder(v: ViewerRef, dto: PlaceOrderDto, idempotencyKey: string | undefined) {
+  async placeOrder(v: ViewerRef, dto: PlaceOrderDto, idempotencyKey: string | undefined, channel: 'web' | 'mobile' = 'web') {
     requireViewer(v);
     if (!idempotencyKey || !IDEMPOTENCY_RULE.test(idempotencyKey)) {
       throw new BadRequestException({ message: 'Missing Idempotency-Key header', code: 'IDEMPOTENCY_KEY_REQUIRED' });
@@ -160,7 +160,7 @@ export class CheckoutService {
             shippingAddress: { ...address } as Prisma.InputJsonObject,
             customerNote: dto.note,
             idempotencyKey,
-            channel: 'web',
+            channel,
           },
         });
 
@@ -336,8 +336,8 @@ export class CheckoutController {
   @Post('checkout/orders')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiHeader({ name: 'Idempotency-Key', required: true, description: 'Random 16–64 char key, reused on retries of the same checkout' })
-  place(@Viewer() v: ViewerRef, @Body() dto: PlaceOrderDto, @Headers('idempotency-key') key?: string) {
-    return this.checkout.placeOrder(v, dto, key);
+  place(@Viewer() v: ViewerRef, @Body() dto: PlaceOrderDto, @Headers('idempotency-key') key?: string, @Headers('x-velora-client') client?: string) {
+    return this.checkout.placeOrder(v, dto, key, client === 'mobile' ? 'mobile' : 'web');
   }
 
   @Post('orders/lookup')

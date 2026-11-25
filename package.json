@@ -3,16 +3,28 @@
   "private": true,
   "version": "0.1.0",
   "description": "VÉLORA — fashion, beauty & lifestyle marketplace (modular monolith)",
-  "workspaces": ["packages/*", "apps/api", "apps/web"],
+  "workspaces": [
+    "packages/*",
+    "apps/api",
+    "apps/web",
+    "apps/mobile"
+  ],
   "scripts": {
     "build:shared": "npm run build -w @velora/shared",
     "dev:api": "npm run start:dev -w @velora/api",
     "dev:web": "npm run dev -w @velora/web",
+    "dev:mobile": "npm run start -w @velora/mobile",
     "db:migrate": "npm run db:migrate -w @velora/api",
     "db:seed": "npm run db:seed -w @velora/api",
     "db:reset": "npm run db:reset -w @velora/api",
     "test:api": "npm run test:e2e -w @velora/api",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
-  "engines": { "node": ">=20.11" }
+  "engines": {
+    "node": ">=20.11"
+  },
+  "overrides": {
+    "@expo/vector-icons": "~15.0.3",
+    "expo-font": "~14.0.12"
+  }
 }
